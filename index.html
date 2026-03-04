@@ -13,15 +13,26 @@
     <!-- 登录区 -->
     <section id="loginView" class="card">
       <h2>进入</h2>
-      <p class="muted">输入用户名和口令（你配置的那批）</p>
+      <p class="muted">输入用户名 + 站点口令（即 Worker 的 SITE_SECRET）。</p>
+
       <div class="row">
         <input id="usernameInput" placeholder="用户名" autocomplete="username" />
-        <input id="passwordInput" placeholder="口令" type="password" autocomplete="current-password" />
+        <input id="passwordInput" placeholder="站点口令" type="password" autocomplete="current-password" />
       </div>
+
+      <div class="row">
+        <label class="checkbox">
+          <input id="rememberPw" type="checkbox" />
+          <span>记住口令（同浏览器下次免输）</span>
+        </label>
+      </div>
+
       <div class="row">
         <button id="loginBtn">登录</button>
       </div>
+
       <p id="loginMsg" class="msg"></p>
+      <p class="muted small">提示：口令不会上传到 GitHub，只用于访问你的 Worker。</p>
     </section>
 
     <!-- 应用区 -->
@@ -29,18 +40,26 @@
       <div class="row space-between">
         <div>
           <h2 id="helloTitle">Hi</h2>
-          <p class="muted">你的列表存在本地浏览器（localStorage）里。</p>
+          <p class="muted">数据存在 GitHub Issue 中，通过 Worker 同步。</p>
         </div>
-        <button id="logoutBtn" class="ghost">退出</button>
+        <div class="row">
+          <button id="syncBtn" class="ghost">同步</button>
+          <button id="logoutBtn" class="ghost">退出</button>
+        </div>
       </div>
 
       <div class="row">
         <input id="newTodoInput" placeholder="添加一个 todo，比如：写论文" />
+        <input id="newDeadlineInput" type="date" />
         <button id="addBtn">添加</button>
       </div>
 
       <ul id="todoList" class="list"></ul>
-      <p class="muted small">提示：点标题可编辑；Enter 保存；Esc 取消。</p>
+
+      <p class="muted small">
+        操作：勾选完成；点标题编辑（Enter 保存 / Esc 取消）；修改日期即更新 deadline；删除按钮删除。
+      </p>
+      <p id="appMsg" class="muted small"></p>
     </section>
   </main>
 
