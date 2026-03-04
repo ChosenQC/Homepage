@@ -1,169 +1,49 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
+<!doctype html>
+<html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的私人群组起始页</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .hidden { display: none; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TODO</title>
+  <link rel="stylesheet" href="./style.css" />
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body>
+  <main class="container">
+    <h1>TODO</h1>
 
-    <div id="auth-section" class="hidden flex items-center justify-center h-screen">
-        <div class="bg-white p-8 rounded-lg shadow-md w-96 text-center">
-            <h2 class="text-2xl font-bold mb-4">请输入通行证</h2>
-            <input type="password" id="token-input" placeholder="GitHub Fine-grained Token" class="w-full border p-2 rounded mb-4">
-            <button onclick="saveToken()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 w-full">确认登录</button>
-            <p class="text-xs text-gray-400 mt-4">Token 将仅存储在您的浏览器本地</p>
+    <!-- 登录区 -->
+    <section id="loginView" class="card">
+      <h2>进入</h2>
+      <p class="muted">输入用户名和口令（你配置的那批）</p>
+      <div class="row">
+        <input id="usernameInput" placeholder="用户名" autocomplete="username" />
+        <input id="passwordInput" placeholder="口令" type="password" autocomplete="current-password" />
+      </div>
+      <div class="row">
+        <button id="loginBtn">登录</button>
+      </div>
+      <p id="loginMsg" class="msg"></p>
+    </section>
+
+    <!-- 应用区 -->
+    <section id="appView" class="card hidden">
+      <div class="row space-between">
+        <div>
+          <h2 id="helloTitle">Hi</h2>
+          <p class="muted">你的列表存在本地浏览器（localStorage）里。</p>
         </div>
-    </div>
+        <button id="logoutBtn" class="ghost">退出</button>
+      </div>
 
-    <div id="portal-section" class="hidden container mx-auto px-4 py-20">
-        <h1 class="text-4xl font-extrabold text-center mb-12 text-gray-800">Hello, 极客</h1>
-        <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-blue-500 hover:scale-105 transition-transform">
-                <h3 class="text-xl font-bold mb-2">📌 Todo List 库</h3>
-                <p class="text-gray-600 mb-4">输入组名进入对应的协作列表</p>
-                <input type="text" id="group-name" placeholder="例如: Group_A" class="border p-2 rounded w-full mb-3">
-                <button onclick="goToTodo()" class="bg-blue-500 text-white px-4 py-2 rounded w-full">进入</button>
-            </div>
-            <div class="bg-gray-100 p-6 rounded-xl shadow-inner border-t-4 border-gray-300">
-                <h3 class="text-xl font-bold mb-2 text-gray-400">🚀 更多功能</h3>
-                <p class="text-gray-400">即将上线...</p>
-            </div>
-        </div>
-        <button onclick="logout()" class="block mx-auto mt-10 text-red-400 text-sm underline">退出登录 (清除 Token)</button>
-    </div>
+      <div class="row">
+        <input id="newTodoInput" placeholder="添加一个 todo，比如：写论文" />
+        <button id="addBtn">添加</button>
+      </div>
 
-    <div id="todo-section" class="hidden container mx-auto max-w-2xl px-4 py-10">
-        <button onclick="goBack()" class="mb-4 text-blue-500">← 返回起始页</button>
-        <h2 id="todo-title" class="text-2xl font-bold mb-6 text-gray-800 underline decoration-blue-500"></h2>
-        
-        <div class="bg-white p-4 rounded shadow-sm mb-6">
-            <div class="flex gap-2">
-                <input type="text" id="new-todo" placeholder="添加新任务..." class="flex-1 border p-2 rounded">
-                <button onclick="addTodo()" class="bg-green-500 text-white px-4 py-2 rounded">添加</button>
-            </div>
-        </div>
+      <ul id="todoList" class="list"></ul>
+      <p class="muted small">提示：点标题可编辑；Enter 保存；Esc 取消。</p>
+    </section>
+  </main>
 
-        <ul id="todo-list" class="space-y-3">
-            <p id="loading-text" class="text-gray-400 italic">正在从 GitHub 仓库加载数据...</p>
-        </ul>
-    </div>
-
-    <script>
-        // --- 配置区 ---
-        const REPO_OWNER = 'ChosenQC'; // 修改这里
-        const REPO_NAME = 'Homepage';      // 修改这里
-
-        // --- 路由与状态管理 ---
-        let currentToken = localStorage.getItem('gh_token');
-        const urlParams = new URLSearchParams(window.location.search);
-        const groupName = urlParams.get('group');
-
-        function init() {
-            if (!currentToken) {
-                showSection('auth-section');
-            } else if (groupName) {
-                showSection('todo-section');
-                loadTodos();
-            } else {
-                showSection('portal-section');
-            }
-        }
-
-        function showSection(id) {
-            ['auth-section', 'portal-section', 'todo-section'].forEach(s => {
-                document.getElementById(s).classList.toggle('hidden', s !== id);
-            });
-        }
-
-        // --- 认证逻辑 ---
-        function saveToken() {
-            const val = document.getElementById('token-input').value;
-            if (val) {
-                localStorage.setItem('gh_token', val);
-                location.reload();
-            }
-        }
-
-        function logout() {
-            localStorage.removeItem('gh_token');
-            location.reload();
-        }
-
-        // --- 业务逻辑 ---
-        function goToTodo() {
-            const name = document.getElementById('group-name').value;
-            if (name) window.location.search = `?group=${name}`;
-        }
-
-        function goBack() {
-            window.location.search = '';
-        }
-
-        // --- GitHub API 操作 ---
-        async function loadTodos() {
-            document.getElementById('todo-title').innerText = `小组: ${groupName}`;
-            // 逻辑说明：先搜索标题等于 groupName 的 Issue，再获取它的 Comments
-            try {
-                const searchRes = await fetch(`https://api.github.com/search/issues?q=repo:${REPO_OWNER}/${REPO_NAME}+is:issue+${groupName} in:title`, {
-                    headers: { 'Authorization': `token ${currentToken}` }
-                });
-                const searchData = await searchRes.json();
-                
-                if (searchData.items.length === 0) {
-                    document.getElementById('loading-text').innerText = "未找到该组，请在 GitHub 手动创建对应标题的 Issue。";
-                    return;
-                }
-
-                const issueNumber = searchData.items[0].number;
-                window.currentIssueNumber = issueNumber; // 暂存
-                
-                const commentsRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/issues/${issueNumber}/comments`, {
-                    headers: { 'Authorization': `token ${currentToken}` }
-                });
-                const comments = await commentsRes.json();
-                renderTodos(comments);
-            } catch (err) {
-                alert("加载失败，请检查 Token 权限或仓库设置");
-            }
-        }
-
-        function renderTodos(comments) {
-            const list = document.getElementById('todo-list');
-            list.innerHTML = comments.map(c => `
-                <li class="bg-white p-3 rounded shadow-sm border-l-4 border-blue-400 flex justify-between items-center">
-                    <span>${c.body}</span>
-                    <button onclick="deleteTodo(${c.id})" class="text-red-300 hover:text-red-500 text-sm">删除</button>
-                </li>
-            `).join('') || '<p class="text-gray-400 text-center">暂无任务</p>';
-        }
-
-        async function addTodo() {
-            const text = document.getElementById('new-todo').value;
-            if (!text) return;
-
-            await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/issues/${window.currentIssueNumber}/comments`, {
-                method: 'POST',
-                headers: { 'Authorization': `token ${currentToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ body: text })
-            });
-            location.reload();
-        }
-
-        async function deleteTodo(commentId) {
-            if (!confirm('确定删除?')) return;
-            await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/issues/comments/${commentId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `token ${currentToken}` }
-            });
-            location.reload();
-        }
-
-        init();
-    </script>
+  <script src="./app.js"></script>
 </body>
 </html>
