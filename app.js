@@ -1,7 +1,6 @@
 // ================== 你只需要改这里 ==================
 const API_BASE = "https://floral-flower-7c16.chen-qiu.workers.dev"; 
-// 例如：https://todo-proxy.yourname.workers.dev
-// ====================================================
+
 
 // Worker endpoints
 const END_GET = "/api/todos/get";
@@ -33,8 +32,8 @@ const appMsg = document.getElementById("appMsg");
 
 // state
 let currentUser = null;
-let siteSecret = null; // Worker 的 SITE_SECRET（用户输入的站点口令）
-let todos = []; // [{id,title,done,deadline,updatedAt}]
+let siteSecret = null;
+let todos = [];
 let busy = false;
 
 // ------------------ helpers ------------------
@@ -59,7 +58,6 @@ function todayISO() {
 }
 
 function compareISODate(a, b) {
-  // a/b are "YYYY-MM-DD"
   if (!a && !b) return 0;
   if (!a) return 1;
   if (!b) return -1;
@@ -103,9 +101,8 @@ function deadlineBadge(deadline) {
   if (!deadline) return null;
 
   const t = todayISO();
-  // overdue: deadline < today
   if (deadline < t) return { text: `逾期 ${deadline}`, cls: "badge overdue" };
-  // soon: within 3 days (simple)
+
   const dt = new Date(deadline + "T00:00:00");
   const now = new Date(t + "T00:00:00");
   const diffDays = Math.round((dt - now) / (1000 * 60 * 60 * 24));
@@ -116,7 +113,6 @@ function deadlineBadge(deadline) {
 function render() {
   todoList.innerHTML = "";
 
-  // 排序：未完成优先；有 deadline 的更靠前；deadline 越早越靠前；最后按 updatedAt
   const sorted = [...todos].sort((a, b) => {
     if (!!a.done !== !!b.done) return a.done ? 1 : -1;
     const cd = compareISODate(a.deadline || "", b.deadline || "");
@@ -209,23 +205,16 @@ const syncFromRemote = withBusy(async () => {
   showAppMsg("同步中…");
   const remote = await remoteGetTodos(currentUser, siteSecret);
 
-  // 简单合并策略（避免覆盖）：按 id 合并，updatedAt 较新的胜出
   const byId = new Map();
   for (const t of remote) byId.set(t.id, t);
 
   for (const t of todos) {
     const r = byId.get(t.id);
-    if (!r) {
-      byId.set(t.id, t);
-    } else {
-      const rt = r.updatedAt || 0;
-      const lt = t.updatedAt || 0;
-      byId.set(t.id, rt >= lt ? r : t);
-    }
+    if (!r) byId.set(t.id, t);
+    else byId.set(t.id, (r.updatedAt || 0) >= (t.updatedAt || 0) ? r : t);
   }
 
   todos = Array.from(byId.values());
-  // 同步后也写回一次，确保合并结果落盘
   await remoteSetTodos(currentUser, siteSecret, todos);
 
   render();
@@ -235,11 +224,15 @@ const syncFromRemote = withBusy(async () => {
 
 // ------------------ login/logout ------------------
 async function loginAs(u, pw) {
+  // ✅ 关键修复：先验证口令是否能从 Worker 拉到数据；成功后才进入 appView
+  const fetchedTodos = await remoteGetTodos(u, pw);
+
   currentUser = u;
   siteSecret = pw;
+  todos = fetchedTodos;
 
   sessionStorage.setItem(sessionUserKey, u);
-  if (rememberPw.checked) {
+  if (rememberPw && rememberPw.checked) {
     localStorage.setItem(savedPwKey(u), pw);
   } else {
     localStorage.removeItem(savedPwKey(u));
@@ -247,9 +240,6 @@ async function loginAs(u, pw) {
 
   helloTitle.textContent = `Hi, ${u}`;
   setView(true);
-
-  // 拉取
-  todos = await remoteGetTodos(u, pw);
   render();
 }
 
@@ -265,6 +255,8 @@ loginBtn.addEventListener("click", withBusy(async () => {
     showLoginMsg("");
     passwordInput.value = "";
   } catch (e) {
+    // ✅ 关键修复：失败时确保回到登录界面
+    setView(false);
     showLoginMsg(String(e.message || e));
   }
 }));
@@ -288,19 +280,17 @@ syncBtn.addEventListener("click", syncFromRemote);
   const saved = localStorage.getItem(savedPwKey(u));
   if (!saved) return;
 
-  // UI 填一下（可选）
   usernameInput.value = u;
-  rememberPw.checked = true;
+  if (rememberPw) rememberPw.checked = true;
 
   try {
     showLoginMsg("恢复会话…");
     await loginAs(u, saved);
     showLoginMsg("");
   } catch (e) {
-    // 失败就清掉
     localStorage.removeItem(savedPwKey(u));
     sessionStorage.removeItem(sessionUserKey);
-    showLoginMsg("自动登录失败：口令可能变了。");
+    showLoginMsg("自动登录失败：口令可能不对或后端出错。");
     setView(false);
   }
 })();
@@ -315,7 +305,7 @@ const addTodo = withBusy(async () => {
     id: uid(),
     title: text,
     done: false,
-    deadline: ddl,   // "YYYY-MM-DD" or ""
+    deadline: ddl,
     updatedAt: Date.now(),
   });
 
