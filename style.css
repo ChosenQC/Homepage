@@ -12,7 +12,7 @@ input { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid #263
 button { padding: 10px 14px; border-radius: 10px; border: 1px solid #2a3a5f; background: #1d2b4a; color: #e8eefc; cursor: pointer; }
 button:hover { filter: brightness(1.08); }
 button.ghost { background: transparent; }
-.hidden { display: none; }
+.hidden { display: none !important; }
 .muted { color: #a9b6d3; }
 .small { font-size: 12px; }
 .msg { margin-top: 8px; color: #ffcf70; min-height: 18px; }
