@@ -13,6 +13,7 @@ button { padding: 10px 14px; border-radius: 10px; border: 1px solid #2a3a5f; bac
 button:hover { filter: brightness(1.08); }
 button.ghost { background: transparent; }
 .hidden { display: none !important; }
+.modalOverlay.hidden { display: none; }
 .muted { color: #a9b6d3; }
 .small { font-size: 12px; }
 .msg { margin-top: 8px; color: #ffcf70; min-height: 18px; }
