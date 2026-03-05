@@ -10,29 +10,56 @@
   <main class="container">
     <h1>TODO</h1>
 
-    <!-- 登录区 -->
-    <section id="loginView" class="card">
-      <h2>进入</h2>
-      <p class="muted">输入用户名 + 站点口令（即 Worker 的 SITE_SECRET）。</p>
+    <!-- 登录/注册 -->
+    <section id="authView" class="card">
+      <div class="row space-between" style="margin-top:0">
+        <h2 id="authTitle" style="margin:0">登录</h2>
+        <div class="row" style="margin-top:0">
+          <button id="toLoginBtn" class="ghost">登录</button>
+          <button id="toRegisterBtn" class="ghost">注册</button>
+        </div>
+      </div>
+
+      <p class="muted small" style="margin-top:8px">
+        站点口令用于访问 Worker（相当于“进站钥匙”）；用户密码用于区分不同用户。
+      </p>
 
       <div class="row">
-        <input id="usernameInput" placeholder="用户名" autocomplete="username" />
-        <input id="passwordInput" placeholder="站点口令" type="password" autocomplete="current-password" />
+        <input id="usernameInput" placeholder="用户名（1~32, 字母数字_-）" autocomplete="username" />
+      </div>
+
+      <div class="row">
+        <input id="siteSecretInput" placeholder="站点口令（SITE_SECRET）" type="password" />
+      </div>
+
+      <div class="row">
+        <input id="userPwInput" placeholder="用户密码（自己设）" type="password" autocomplete="current-password" />
+      </div>
+
+      <div class="row hidden" id="userPw2Row">
+        <input id="userPw2Input" placeholder="确认用户密码（仅注册）" type="password" autocomplete="new-password" />
       </div>
 
       <div class="row">
         <label class="checkbox">
+          <input id="rememberUser" type="checkbox" />
+          <span>记住用户名</span>
+        </label>
+        <label class="checkbox">
+          <input id="rememberSite" type="checkbox" />
+          <span>记住站点口令</span>
+        </label>
+        <label class="checkbox">
           <input id="rememberPw" type="checkbox" />
-          <span>记住口令（同浏览器下次免输）</span>
+          <span>记住用户密码</span>
         </label>
       </div>
 
       <div class="row">
-        <button id="loginBtn">登录</button>
+        <button id="authBtn">登录</button>
       </div>
 
-      <p id="loginMsg" class="msg"></p>
-      <p class="muted small">提示：口令不会上传到 GitHub，只用于访问你的 Worker。</p>
+      <p id="authMsg" class="msg"></p>
     </section>
 
     <!-- 应用区 -->
@@ -57,12 +84,13 @@
       <ul id="todoList" class="list"></ul>
 
       <p class="muted small">
-        操作：勾选完成；点标题编辑（Enter 保存 / Esc 取消）；修改日期即更新 deadline；删除按钮删除。
+        操作：勾选完成；点标题编辑（Enter 保存 / Esc 取消）；改日期更新 deadline；删除按钮删除。
       </p>
       <p id="appMsg" class="muted small"></p>
     </section>
   </main>
 
-  <script src="./app.js"></script>
+  <!-- 强烈建议加版本号避免缓存 -->
+  <script src="./app.js?v=20260305-1"></script>
 </body>
 </html>
