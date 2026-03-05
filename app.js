@@ -1,21 +1,24 @@
+// ================== 改这里：你的 Worker 域名 ==================
 const API_BASE = "https://floral-flower-7c16.chen-qiu.workers.dev";
+// =============================================================
 
 const END_REGISTER = "/api/auth/register";
 const END_LOGIN    = "/api/auth/login";
 const END_GET      = "/api/todos/get";
 const END_SET      = "/api/todos/set";
 
-// Calendar config
+// Calendar config (你嫌格子多就调这里)
 const WEEK_START = 0;        // 0=Sunday
-const START_HOUR = 8;   // 08:00
-const END_HOUR   = 20;  // 20:00
-const SLOT_MIN   = 60;  //
+const START_HOUR = 8;
+const END_HOUR   = 20;
+const SLOT_MIN   = 60;       // 60分钟一格（更少格子）
+const ROW_PX     = 28;       // 每格高度，对应 CSS .slot min-height
 
 // local keys
-const kUser = "todo_v5_user";
-const kSite = "todo_v5_site";
-const kPw   = "todo_v5_pw";
-const kSess = "todo_v5_session";
+const kUser = "todo_v6_user";
+const kSite = "todo_v6_site";
+const kPw   = "todo_v6_pw";
+const kSess = "todo_v6_session";
 
 // DOM auth
 const authView = document.getElementById("authView");
@@ -73,23 +76,11 @@ let siteSecret = null;
 let userPassword = null;
 
 /**
- * Store format (saved in GitHub issue):
- * {
- *   version: 2,
- *   tasks: Task[],
- *   priority: string[]  // array of task ids in priority order
- * }
- *
- * Task:
- *  - { id, type:"scheduled", title, startISO, durationMin, updatedAt }
- *  - { id, type:"deadline", title, deadlineISO, updatedAt }
+ * Store format:
+ * { version: 2, tasks: Task[], priority: string[] }
  */
 let store = { version: 2, tasks: [], priority: [] };
-
-// week view anchor date (any date inside current week)
 let viewDate = new Date();
-
-// modal editing state
 let editingTaskId = null;
 
 // ---------- helpers ----------
@@ -121,21 +112,13 @@ function withBusy(fn) {
 function validUsername(u) {
   return /^[a-zA-Z0-9_-]{1,32}$/.test(u);
 }
-
 function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
-
 function pad2(n) { return String(n).padStart(2, "0"); }
-function toISODate(d) {
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-}
-function toLocalDTInputValue(d) {
-  // datetime-local expects "YYYY-MM-DDTHH:mm"
-  return `${toISODate(d)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
+function toISODate(d) { return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function toLocalDTInputValue(d) { return `${toISODate(d)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
 function fromLocalDTInputValue(s) {
-  // "YYYY-MM-DDTHH:mm" -> Date (local)
   const [datePart, timePart] = (s || "").split("T");
   if (!datePart || !timePart) return null;
   const [y,m,dd] = datePart.split("-").map(Number);
@@ -145,46 +128,41 @@ function fromLocalDTInputValue(s) {
   d.setHours(hh||0, mm||0, 0, 0);
   return d;
 }
-function minutesSinceStart(d) {
-  return d.getHours()*60 + d.getMinutes();
-}
 
 function startOfWeek(date) {
   const d = new Date(date);
   d.setHours(0,0,0,0);
-  const day = d.getDay(); // 0 Sun
+  const day = d.getDay();
   const diff = (day - WEEK_START + 7) % 7;
   d.setDate(d.getDate() - diff);
   return d;
 }
-function addDays(date, n) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-}
-function addMinutes(date, n) {
-  const d = new Date(date);
-  d.setMinutes(d.getMinutes() + n);
-  return d;
-}
+function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
+function addMinutes(date, n) { const d = new Date(date); d.setMinutes(d.getMinutes() + n); return d; }
+function minutesOfDay(d) { return d.getHours()*60 + d.getMinutes(); }
 
-function deadlineBadge(deadlineISO) {
-  if (!deadlineISO) return { text: "No DDL", cls: "badge" };
-  const now = new Date();
-  const ddl = new Date(deadlineISO);
-  const today = new Date(now); today.setHours(0,0,0,0);
-  const d0 = new Date(ddl); d0.setHours(0,0,0,0);
-
-  if (d0 < today) return { text: `逾期`, cls: "badge overdue" };
-  const diffDays = Math.round((d0 - today) / (1000*60*60*24));
-  if (diffDays <= 3) return { text: `临近`, cls: "badge soon" };
-  return { text: `DDL`, cls: "badge" };
+function escapeHTML(s) {
+  return String(s || "").replace(/[&<>"']/g, (c) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  })[c]);
 }
 
 function taskTimeKey(task) {
   if (task.type === "scheduled") return new Date(task.startISO).getTime();
   if (task.type === "deadline") return new Date(task.deadlineISO).getTime();
   return Infinity;
+}
+
+function deadlineBadge(deadlineISO) {
+  if (!deadlineISO) return { text: "DDL", cls: "badge" };
+  const now = new Date();
+  const ddl = new Date(deadlineISO);
+  const today = new Date(now); today.setHours(0,0,0,0);
+  const d0 = new Date(ddl); d0.setHours(0,0,0,0);
+  if (d0 < today) return { text: "逾期", cls: "badge overdue" };
+  const diffDays = Math.round((d0 - today) / (1000*60*60*24));
+  if (diffDays <= 3) return { text: "临近", cls: "badge soon" };
+  return { text: "DDL", cls: "badge" };
 }
 
 // ---------- API ----------
@@ -199,35 +177,27 @@ async function api(path, payload) {
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
-async function doRegister(u, site, pw) {
-  return await api(END_REGISTER, { site_secret: site, username: u, user_password: pw });
-}
-async function doLogin(u, site, pw) {
-  return await api(END_LOGIN, { site_secret: site, username: u, user_password: pw });
-}
+async function doRegister(u, site, pw) { return await api(END_REGISTER, { site_secret: site, username: u, user_password: pw }); }
+async function doLogin(u, site, pw) { return await api(END_LOGIN, { site_secret: site, username: u, user_password: pw }); }
 async function remoteGetStore(u, site, pw) {
   const data = await api(END_GET, { site_secret: site, username: u, user_password: pw });
-  return data.todos || []; // legacy name in Worker: "todos"
+  return data.todos || null;
 }
 async function remoteSetStore(u, site, pw, value) {
   await api(END_SET, { site_secret: site, username: u, user_password: pw, todos: value });
 }
 
-// ---------- store migration ----------
+// ---------- store normalize ----------
 function normalizeStore(raw) {
-  // raw could be:
-  // 1) old array of todos
-  // 2) object {version, tasks, priority}
-  // 3) empty
   if (!raw) return { version: 2, tasks: [], priority: [] };
 
   if (Array.isArray(raw)) {
-    // migrate legacy todo array into deadline tasks
+    // migrate legacy array -> deadline tasks
     const tasks = raw.map(t => ({
       id: t.id || uid(),
       type: "deadline",
       title: t.title || "Untitled",
-      deadlineISO: t.deadline ? `${t.deadline}T00:00` : toLocalDTInputValue(new Date()), // best-effort
+      deadlineISO: t.deadline ? `${t.deadline}T23:59:00.000Z` : new Date().toISOString(),
       updatedAt: t.updatedAt || Date.now(),
     }));
     const priority = [...tasks].sort((a,b)=>taskTimeKey(a)-taskTimeKey(b)).map(t=>t.id);
@@ -235,15 +205,32 @@ function normalizeStore(raw) {
   }
 
   if (typeof raw === "object" && raw.version === 2 && Array.isArray(raw.tasks) && Array.isArray(raw.priority)) {
-    return {
-      version: 2,
-      tasks: raw.tasks,
-      priority: raw.priority,
-    };
+    return { version: 2, tasks: raw.tasks, priority: raw.priority };
   }
 
-  // unknown -> reset
   return { version: 2, tasks: [], priority: [] };
+}
+
+function ensurePriorityComplete() {
+  const ids = new Set(store.tasks.map(t => t.id));
+  store.priority = store.priority.filter(id => ids.has(id));
+  for (const t of store.tasks) if (!store.priority.includes(t.id)) store.priority.push(t.id);
+}
+
+function insertByTimeDefault(newTask) {
+  ensurePriorityComplete();
+  const ids = store.priority.slice();
+  const byId = new Map(store.tasks.map(t => [t.id, t]));
+  const key = taskTimeKey(newTask);
+  let inserted = false;
+  const out = [];
+  for (const id of ids) {
+    const t = byId.get(id);
+    if (!inserted && t && taskTimeKey(t) > key) { out.push(newTask.id); inserted = true; }
+    out.push(id);
+  }
+  if (!inserted) out.push(newTask.id);
+  store.priority = out;
 }
 
 // ---------- auth ----------
@@ -253,11 +240,7 @@ async function enterApp(u, site, pw, fetched) {
   userPassword = pw;
 
   store = normalizeStore(fetched);
-
-  // ensure priority contains all tasks (and no extra)
-  const ids = new Set(store.tasks.map(t => t.id));
-  store.priority = store.priority.filter(id => ids.has(id));
-  for (const t of store.tasks) if (!store.priority.includes(t.id)) store.priority.push(t.id);
+  ensurePriorityComplete();
 
   helloTitle.textContent = `Hi, ${u}`;
   sessionStorage.setItem(kSess, "1");
@@ -283,23 +266,17 @@ const handleAuth = withBusy(async () => {
     if (mode === "register") {
       if (!pw2) { setAuthMsg("请确认用户密码。"); return; }
       if (pw !== pw2) { setAuthMsg("两次输入的用户密码不一致。"); return; }
-
       setAuthMsg("注册中…");
       await doRegister(u, site, pw);
-
       setAuthMsg("注册成功，登录中…");
-      const data = await doLogin(u, site, pw);
-      await enterApp(u, site, pw, data.todos);
-
-      setAuthMsg("");
-      userPw2Input.value = "";
-      return;
+    } else {
+      setAuthMsg("登录中…");
     }
 
-    setAuthMsg("登录中…");
     const data = await doLogin(u, site, pw);
     await enterApp(u, site, pw, data.todos);
     setAuthMsg("");
+    userPw2Input.value = "";
   } catch (e) {
     setView(false);
     setAuthMsg(String(e.message || e));
@@ -318,24 +295,18 @@ const syncFromRemote = withBusy(async () => {
   setAppMsg("同步中…");
   const remote = normalizeStore(await remoteGetStore(username, siteSecret, userPassword));
 
-  // merge by id with updatedAt
+  // merge tasks by id with updatedAt
   const byId = new Map();
   for (const t of remote.tasks) byId.set(t.id, t);
-
   for (const t of store.tasks) {
     const r = byId.get(t.id);
     if (!r) byId.set(t.id, t);
     else byId.set(t.id, (r.updatedAt || 0) >= (t.updatedAt || 0) ? r : t);
   }
-
   store.tasks = Array.from(byId.values());
 
-  // priority: prefer current order, append missing
-  const ids = new Set(store.tasks.map(t => t.id));
-  const nextP = [];
-  for (const id of store.priority) if (ids.has(id)) nextP.push(id);
-  for (const t of store.tasks) if (!nextP.includes(t.id)) nextP.push(t.id);
-  store.priority = nextP;
+  // keep existing priority, append missing
+  ensurePriorityComplete();
 
   await persist();
   renderAll();
@@ -343,13 +314,16 @@ const syncFromRemote = withBusy(async () => {
   setTimeout(() => setAppMsg(""), 900);
 });
 
-// ---------- calendar rendering ----------
+// ---------- render ----------
 function renderAll() {
   renderCalendar();
   renderPriority();
 }
 
 function renderCalendar() {
+  // clear any old overlays
+  calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
+
   const week0 = startOfWeek(viewDate);
   const weekEnd = addDays(week0, 6);
   weekTitle.textContent = `${toISODate(week0)} ~ ${toISODate(weekEnd)} （周日开始）`;
@@ -357,16 +331,15 @@ function renderCalendar() {
   calGrid.innerHTML = "";
 
   // header row
-  calGrid.appendChild(div("cellH", "")); // top-left empty
+  calGrid.appendChild(cellH("")); // top-left
   for (let i = 0; i < 7; i++) {
     const d = addDays(week0, i);
     const name = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
-    const h = div("cellH", "");
+    const h = cellH("");
     const hdr = document.createElement("div");
     hdr.className = "dayHeader";
     hdr.innerHTML = `<div class="d1">${name}</div><div class="d2">${toISODate(d)}</div>`;
 
-    // deadline chips
     const chips = document.createElement("div");
     chips.className = "dayDeadline";
     const dayKey = toISODate(d);
@@ -388,18 +361,14 @@ function renderCalendar() {
     calGrid.appendChild(h);
   }
 
-  // time slots
+  // grid slots
   const totalMin = (END_HOUR - START_HOUR) * 60;
   const rows = Math.floor(totalMin / SLOT_MIN);
-  const ROW_PX = 28;                 // 与 CSS slot min-height 对齐（你现在是 28px）
   const dayMin0 = START_HOUR * 60;
 
-  // background grid (time label + slots)
   for (let r = 0; r < rows; r++) {
     const tMin = dayMin0 + r * SLOT_MIN;
-    const hh = Math.floor(tMin / 60);
-    const mm = tMin % 60;
-    calGrid.appendChild(div("timeCell", `${pad2(hh)}:${pad2(mm)}`));
+    calGrid.appendChild(timeCell(`${pad2(Math.floor(tMin/60))}:${pad2(tMin%60)}`));
 
     for (let day = 0; day < 7; day++) {
       const cell = document.createElement("div");
@@ -413,22 +382,51 @@ function renderCalendar() {
         const start = addMinutes(d, tMin);
         openCreateScheduled(start);
       };
-
       calGrid.appendChild(cell);
     }
   }
 
-  // ---- overlay columns (one per day) ----
-  // grid rows: 1 header + rows time rows
-  // overlay should cover row 2..(rows+1)
+  // overlays need layout measurements AFTER the DOM is in place
+  requestAnimationFrame(() => {
+    drawOverlaysAndEvents(week0, rows, dayMin0);
+  });
+}
+
+function drawOverlaysAndEvents(week0, rows, dayMin0) {
+  // remove old overlays
+  calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
+
+  // compute header height using any header cell
+  const headerCell = calGrid.querySelector(".cellH");
+  const headerH = headerCell ? headerCell.getBoundingClientRect().height : 56;
+
+  // find each day's first slot cell (at dayMin0)
+  const gridRect = calGrid.getBoundingClientRect();
+  const overlayTop = headerH;
+  const overlayHeight = rows * ROW_PX;
+
+  const overlays = [];
   for (let day = 0; day < 7; day++) {
+    const firstSlot = calGrid.querySelector(`.slot[data-day="${day}"][data-tmin="${dayMin0}"]`);
+    if (!firstSlot) continue;
+    const r = firstSlot.getBoundingClientRect();
+
     const overlay = document.createElement("div");
     overlay.className = "dayOverlay";
-    overlay.style.gridColumn = String(day + 2);          // col 1 is time
-    overlay.style.gridRow = `2 / ${rows + 2}`;           // start at row 2, end after last row
-    calGrid.appendChild(overlay);
+    overlay.style.top = `${overlayTop}px`;
+    overlay.style.left = `${r.left - gridRect.left}px`;
+    overlay.style.width = `${r.width}px`;
+    overlay.style.height = `${overlayHeight}px`;
 
-    // render scheduled events for this day in overlay
+    calGrid.appendChild(overlay);
+    overlays.push({ day, overlay, colRect: r });
+  }
+
+  // render scheduled events into each overlay with overlap layout
+  const weekStartTs = week0.getTime();
+  const weekEndTs = addDays(week0, 7).getTime();
+
+  for (const { day, overlay } of overlays) {
     const dayDate = addDays(week0, day);
     const dayKey = toISODate(dayDate);
 
@@ -436,28 +434,26 @@ function renderCalendar() {
       .filter(t => t.type === "scheduled")
       .map(t => {
         const st = new Date(t.startISO);
-        return { task: t, st, end: new Date(st.getTime() + (t.durationMin||60)*60000) };
+        const startMin = minutesOfDay(st);
+        const endMin = startMin + (t.durationMin || 60);
+        return { task: t, st, startMin, endMin };
       })
-      .filter(x => toISODate(x.st) === dayKey)
-      // clip to visible hours (optional)
-      .map(x => {
-        const startMin = x.st.getHours()*60 + x.st.getMinutes();
-        const endMin = startMin + (x.task.durationMin||60);
-        return { ...x, startMin, endMin };
+      .filter(x => {
+        const ts = x.st.getTime();
+        return ts >= weekStartTs && ts < weekEndTs && toISODate(x.st) === dayKey;
       })
-      .filter(x => x.endMin > dayMin0 && x.startMin < (END_HOUR*60))
-      .sort((a,b) => xcmp(a,b));
+      .filter(x => x.endMin > dayMin0 && x.startMin < END_HOUR*60)
+      .sort((a,b) => (a.startMin - b.startMin) || (a.endMin - b.endMin));
 
-    // layout overlaps -> assign columns
     const laid = layoutDayEvents(events);
 
-    // draw
     for (const e of laid) {
       const t = e.task;
 
-      // position within visible range
+      // clip to visible range
       const topMin = Math.max(e.startMin, dayMin0);
       const botMin = Math.min(e.endMin, END_HOUR*60);
+
       const top = ((topMin - dayMin0) / SLOT_MIN) * ROW_PX + 3;
       const height = Math.max(18, ((botMin - topMin) / SLOT_MIN) * ROW_PX - 6);
 
@@ -473,54 +469,40 @@ function renderCalendar() {
 
       const st = new Date(t.startISO);
       node.innerHTML = `<div class="t">${escapeHTML(t.title)}</div>
-                        <div class="s">${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${t.durationMin}m</div>`;
+                        <div class="s">${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${(t.durationMin||60)}m</div>`;
       node.onclick = (evt) => { evt.stopPropagation(); openEditTask(t.id); };
-
       overlay.appendChild(node);
     }
   }
 
-  function xcmp(a,b){
-    if (a.startMin !== b.startMin) return a.startMin - b.startMin;
-    return a.endMin - b.endMin;
-  }
-
-  // interval partition + component max cols
   function layoutDayEvents(events) {
-    // Union-Find for overlap components
     const n = events.length;
+    if (n === 0) return [];
+    // greedy columns + union overlaps to compute component width
     const parent = Array.from({length:n}, (_,i)=>i);
     const find = (x)=> (parent[x]===x?x:(parent[x]=find(parent[x])));
     const uni = (a,b)=>{ a=find(a); b=find(b); if(a!==b) parent[b]=a; };
 
-    // sweep to union overlaps + assign columns greedily
-    const colEnds = [];           // endMin per column
+    const colEnds = [];
     const colOf = Array(n).fill(0);
-
-    // active list for union (store indices with endMin)
-    const active = [];
+    const active = []; // {idx, endMin}
 
     for (let i=0;i<n;i++) {
       const cur = events[i];
-
-      // remove inactive from active
       for (let k=active.length-1;k>=0;k--) {
         if (active[k].endMin <= cur.startMin) active.splice(k,1);
       }
-      // union with all active (overlaps)
       for (const a of active) uni(a.idx, i);
 
-      // assign first free column
       let col = 0;
       while (col < colEnds.length && colEnds[col] > cur.startMin) col++;
       if (col === colEnds.length) colEnds.push(cur.endMin);
       else colEnds[col] = cur.endMin;
-      colOf[i] = col;
 
+      colOf[i] = col;
       active.push({ idx: i, endMin: cur.endMin });
     }
 
-    // compute cols per component = max(col)+1 within component
     const maxCol = new Map();
     for (let i=0;i<n;i++) {
       const root = find(i);
@@ -528,38 +510,16 @@ function renderCalendar() {
       maxCol.set(root, Math.max(maxCol.get(root)||0, c));
     }
 
-    return events.map((ev, i) => ({
-      ...ev,
-      col: colOf[i],
-      cols: maxCol.get(find(i)) || 1,
-    }));
+    return events.map((ev,i)=>({ ...ev, col: colOf[i], cols: maxCol.get(find(i)) || 1 }));
   }
 }
 
-function div(cls, text) {
-  const d = document.createElement("div");
-  d.className = cls;
-  d.textContent = text;
-  return d;
-}
-
-function escapeHTML(s) {
-  return String(s || "").replace(/[&<>"']/g, (c) => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-  })[c]);
-}
-
-// ---------- priority sidebar ----------
 function renderPriority() {
-  priorityList.innerHTML = "";
+  ensurePriorityComplete();
   const byId = new Map(store.tasks.map(t => [t.id, t]));
+  priorityList.innerHTML = "";
 
-  // cleanup priority
-  store.priority = store.priority.filter(id => byId.has(id));
-  for (const t of store.tasks) if (!store.priority.includes(t.id)) store.priority.push(t.id);
-
-  for (let idx=0; idx<store.priority.length; idx++) {
-    const id = store.priority[idx];
+  for (const id of store.priority) {
     const t = byId.get(id);
     if (!t) continue;
 
@@ -568,31 +528,21 @@ function renderPriority() {
     li.draggable = true;
     li.dataset.id = id;
 
-    const badge = (t.type === "deadline")
-      ? deadlineBadge(t.deadlineISO)
-      : { text: "CAL", cls: "badge" };
-
-    const meta = taskMeta(t);
-
+    const badge = (t.type === "deadline") ? deadlineBadge(t.deadlineISO) : { text: "CAL", cls: "badge" };
     li.innerHTML = `
       <div class="pt">
         <div class="name">${escapeHTML(t.title)}</div>
         <span class="${badge.cls}">${badge.text}</span>
       </div>
-      <div class="meta">${escapeHTML(meta)}</div>
+      <div class="meta">${escapeHTML(taskMeta(t))}</div>
     `;
-
     li.onclick = () => openEditTask(id);
 
-    // drag & drop
     li.addEventListener("dragstart", (e) => {
       e.dataTransfer.setData("text/plain", id);
       e.dataTransfer.effectAllowed = "move";
     });
-    li.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    });
+    li.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; });
     li.addEventListener("drop", withBusy(async (e) => {
       e.preventDefault();
       const fromId = e.dataTransfer.getData("text/plain");
@@ -607,18 +557,6 @@ function renderPriority() {
   }
 }
 
-function taskMeta(t) {
-  if (t.type === "scheduled") {
-    const st = new Date(t.startISO);
-    return `${toISODate(st)} ${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${t.durationMin}m`;
-    }
-  if (t.type === "deadline") {
-    const dl = new Date(t.deadlineISO);
-    return `Deadline: ${toISODate(dl)} ${pad2(dl.getHours())}:${pad2(dl.getMinutes())}`;
-  }
-  return "";
-}
-
 function reorderPriority(fromId, toId) {
   const p = store.priority.slice();
   const fromIdx = p.indexOf(fromId);
@@ -629,27 +567,29 @@ function reorderPriority(fromId, toId) {
   store.priority = p;
 }
 
-function insertByTimeDefault(newTask) {
-  // default: insert into priority by time order (ascending)
-  const ids = store.priority.slice();
-  const byId = new Map(store.tasks.map(t => [t.id, t]));
-
-  // if priority empty, just push
-  if (ids.length === 0) { ids.push(newTask.id); store.priority = ids; return; }
-
-  const key = taskTimeKey(newTask);
-  let inserted = false;
-  const out = [];
-  for (const id of ids) {
-    const t = byId.get(id);
-    if (!inserted && t && taskTimeKey(t) > key) {
-      out.push(newTask.id);
-      inserted = true;
-    }
-    out.push(id);
+function taskMeta(t) {
+  if (t.type === "scheduled") {
+    const st = new Date(t.startISO);
+    return `${toISODate(st)} ${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${t.durationMin || 60}m`;
   }
-  if (!inserted) out.push(newTask.id);
-  store.priority = out;
+  if (t.type === "deadline") {
+    const dl = new Date(t.deadlineISO);
+    return `Deadline: ${toISODate(dl)} ${pad2(dl.getHours())}:${pad2(dl.getMinutes())}`;
+  }
+  return "";
+}
+
+function cellH(text) {
+  const d = document.createElement("div");
+  d.className = "cellH";
+  d.textContent = text;
+  return d;
+}
+function timeCell(text) {
+  const d = document.createElement("div");
+  d.className = "timeCell";
+  d.textContent = text;
+  return d;
 }
 
 // ---------- modal ----------
@@ -661,7 +601,6 @@ function closeModal() {
   modalOverlay.classList.add("hidden");
   editingTaskId = null;
 }
-
 function applyModalMode(isDeadline) {
   deadlineFields.classList.toggle("hidden", !isDeadline);
   scheduledFields.classList.toggle("hidden", isDeadline);
@@ -677,12 +616,10 @@ function openCreateScheduled(startDate) {
   applyModalMode(false);
 
   taskStartInput.value = toLocalDTInputValue(startDate);
-  taskDurInput.value = "60";
+  taskDurInput.value = "120";
   taskDeadlineInput.value = "";
-
   openModal();
 }
-
 function openCreateDeadline(defaultDay = new Date()) {
   editingTaskId = null;
   modalTitle.textContent = "新建 Deadline 任务";
@@ -692,16 +629,13 @@ function openCreateDeadline(defaultDay = new Date()) {
   taskIsDeadline.checked = true;
   applyModalMode(true);
 
-  // default deadline: today 23:59
   const d = new Date(defaultDay);
   d.setHours(23,59,0,0);
   taskDeadlineInput.value = toLocalDTInputValue(d);
   taskStartInput.value = "";
   taskDurInput.value = "60";
-
   openModal();
 }
-
 function openEditTask(id) {
   const t = store.tasks.find(x => x.id === id);
   if (!t) return;
@@ -724,16 +658,12 @@ function openEditTask(id) {
     taskStartInput.value = "";
     taskDurInput.value = "60";
   }
-
   openModal();
 }
 
 taskIsDeadline.addEventListener("change", () => applyModalMode(taskIsDeadline.checked));
-
 modalCloseBtn.onclick = closeModal;
-modalOverlay.addEventListener("click", (e) => {
-  if (e.target === modalOverlay) closeModal();
-});
+modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeModal(); });
 
 modalSaveBtn.addEventListener("click", withBusy(async () => {
   try {
@@ -741,20 +671,13 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
     if (!title) { setModalMsg("请输入任务标题。"); return; }
 
     const isDeadline = !!taskIsDeadline.checked;
+    const now = Date.now();
 
     if (!editingTaskId) {
-      // create
-      const now = Date.now();
       if (isDeadline) {
         const dl = fromLocalDTInputValue(taskDeadlineInput.value);
         if (!dl) { setModalMsg("请选择 deadline 时间。"); return; }
-        const t = {
-          id: uid(),
-          type: "deadline",
-          title,
-          deadlineISO: dl.toISOString(),
-          updatedAt: now,
-        };
+        const t = { id: uid(), type: "deadline", title, deadlineISO: dl.toISOString(), updatedAt: now };
         store.tasks.push(t);
         insertByTimeDefault(t);
       } else {
@@ -762,52 +685,30 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
         const dur = parseInt(taskDurInput.value || "60", 10);
         if (!st) { setModalMsg("请选择开始时间。"); return; }
         if (!dur || dur < 15) { setModalMsg("时长至少 15 分钟。"); return; }
-        const t = {
-          id: uid(),
-          type: "scheduled",
-          title,
-          startISO: st.toISOString(),
-          durationMin: Math.round(dur / 15) * 15,
-          updatedAt: now,
-        };
+        const t = { id: uid(), type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, updatedAt: now };
         store.tasks.push(t);
         insertByTimeDefault(t);
       }
     } else {
-      // edit
       const idx = store.tasks.findIndex(x => x.id === editingTaskId);
       if (idx < 0) { closeModal(); return; }
-
-      const now = Date.now();
       const old = store.tasks[idx];
 
       if (isDeadline) {
         const dl = fromLocalDTInputValue(taskDeadlineInput.value);
         if (!dl) { setModalMsg("请选择 deadline 时间。"); return; }
-        store.tasks[idx] = {
-          id: old.id,
-          type: "deadline",
-          title,
-          deadlineISO: dl.toISOString(),
-          updatedAt: now,
-        };
+        store.tasks[idx] = { id: old.id, type: "deadline", title, deadlineISO: dl.toISOString(), updatedAt: now };
       } else {
         const st = fromLocalDTInputValue(taskStartInput.value);
         const dur = parseInt(taskDurInput.value || "60", 10);
         if (!st) { setModalMsg("请选择开始时间。"); return; }
         if (!dur || dur < 15) { setModalMsg("时长至少 15 分钟。"); return; }
-        store.tasks[idx] = {
-          id: old.id,
-          type: "scheduled",
-          title,
-          startISO: st.toISOString(),
-          durationMin: Math.round(dur / 15) * 15,
-          updatedAt: now,
-        };
+        store.tasks[idx] = { id: old.id, type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, updatedAt: now };
       }
-      // priority list keeps id; default order unchanged (user may have dragged)
+      // priority order unchanged
     }
 
+    ensurePriorityComplete();
     await persist();
     closeModal();
     renderAll();
@@ -826,15 +727,14 @@ modalDeleteBtn.addEventListener("click", withBusy(async () => {
   renderAll();
 }));
 
-// ---------- week navigation ----------
+// ---------- navigation ----------
 prevWeekBtn.onclick = () => { viewDate = addDays(viewDate, -7); renderCalendar(); };
 nextWeekBtn.onclick = () => { viewDate = addDays(viewDate,  7); renderCalendar(); };
 todayBtn.onclick = () => { viewDate = new Date(); renderCalendar(); };
 
-// ---------- UI actions ----------
+// ---------- sidebar actions ----------
 newDeadlineBtn.onclick = () => openCreateDeadline(viewDate);
 syncBtn.addEventListener("click", syncFromRemote);
-
 logoutBtn.addEventListener("click", () => {
   sessionStorage.removeItem(kSess);
   username = null; siteSecret = null; userPassword = null;
@@ -851,6 +751,7 @@ toRegisterBtn.addEventListener("click", () => setMode("register"));
 (function init() {
   setMode("login");
   setView(false);
+  modalOverlay.classList.add("hidden");
 
   const savedUser = localStorage.getItem(kUser);
   const savedSite = localStorage.getItem(kSite);
@@ -861,4 +762,9 @@ toRegisterBtn.addEventListener("click", () => setMode("register"));
   if (savedPw) { userPwInput.value = savedPw; rememberPw.checked = true; }
 
   viewDate = new Date();
+
+  // keep overlays aligned on resize
+  window.addEventListener("resize", () => {
+    if (!appView.classList.contains("hidden")) renderCalendar();
+  });
 })();
