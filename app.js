@@ -7,7 +7,7 @@ const END_LOGIN    = "/api/auth/login";
 const END_GET      = "/api/todos/get";
 const END_SET      = "/api/todos/set";
 
-// Calendar config (你嫌格子多就调这里)
+// Calendar config（你嫌格子多就调这里）
 const WEEK_START = 0;        // 0=Sunday
 const START_HOUR = 8;
 const END_HOUR   = 20;
@@ -15,10 +15,10 @@ const SLOT_MIN   = 60;       // 60分钟一格（更少格子）
 const ROW_PX     = 28;       // 每格高度，对应 CSS .slot min-height
 
 // local keys
-const kUser = "todo_v6_user";
-const kSite = "todo_v6_site";
-const kPw   = "todo_v6_pw";
-const kSess = "todo_v6_session";
+const kUser = "todo_v7_user";
+const kSite = "todo_v7_site";
+const kPw   = "todo_v7_pw";
+const kSess = "todo_v7_session";
 
 // DOM auth
 const authView = document.getElementById("authView");
@@ -78,6 +78,10 @@ let userPassword = null;
 /**
  * Store format:
  * { version: 2, tasks: Task[], priority: string[] }
+ *
+ * Task:
+ *  - scheduled: { id, type:"scheduled", title, startISO, durationMin, updatedAt }
+ *  - deadline:  { id, type:"deadline",  title, deadlineISO, updatedAt }
  */
 let store = { version: 2, tasks: [], priority: [] };
 let viewDate = new Date();
@@ -217,16 +221,25 @@ function ensurePriorityComplete() {
   for (const t of store.tasks) if (!store.priority.includes(t.id)) store.priority.push(t.id);
 }
 
+/**
+ * ✅ FIXED: insert into priority without duplication
+ * - remove existing id first
+ * - insert by time key
+ */
 function insertByTimeDefault(newTask) {
-  ensurePriorityComplete();
-  const ids = store.priority.slice();
-  const byId = new Map(store.tasks.map(t => [t.id, t]));
+  store.priority = store.priority.filter(id => id !== newTask.id);
+
   const key = taskTimeKey(newTask);
+  const byId = new Map(store.tasks.map(t => [t.id, t]));
+
   let inserted = false;
   const out = [];
-  for (const id of ids) {
+  for (const id of store.priority) {
     const t = byId.get(id);
-    if (!inserted && t && taskTimeKey(t) > key) { out.push(newTask.id); inserted = true; }
+    if (!inserted && t && taskTimeKey(t) > key) {
+      out.push(newTask.id);
+      inserted = true;
+    }
     out.push(id);
   }
   if (!inserted) out.push(newTask.id);
@@ -305,11 +318,11 @@ const syncFromRemote = withBusy(async () => {
   }
   store.tasks = Array.from(byId.values());
 
-  // keep existing priority, append missing
   ensurePriorityComplete();
 
   await persist();
   renderAll();
+
   setAppMsg("同步完成 ✅");
   setTimeout(() => setAppMsg(""), 900);
 });
@@ -321,7 +334,7 @@ function renderAll() {
 }
 
 function renderCalendar() {
-  // clear any old overlays
+  // remove any existing overlays before rebuilding
   calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
 
   const week0 = startOfWeek(viewDate);
@@ -386,31 +399,28 @@ function renderCalendar() {
     }
   }
 
-  // overlays need layout measurements AFTER the DOM is in place
-  requestAnimationFrame(() => {
-    drawOverlaysAndEvents(week0, rows, dayMin0);
-  });
+  // overlays need DOM measurements after render
+  requestAnimationFrame(() => drawOverlaysAndEvents(week0, rows, dayMin0));
 }
 
 function drawOverlaysAndEvents(week0, rows, dayMin0) {
-  // remove old overlays
+  // clear old overlays
   calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
 
-  // compute header height using any header cell
   const headerCell = calGrid.querySelector(".cellH");
   const headerH = headerCell ? headerCell.getBoundingClientRect().height : 56;
 
-  // find each day's first slot cell (at dayMin0)
   const gridRect = calGrid.getBoundingClientRect();
   const overlayTop = headerH;
   const overlayHeight = rows * ROW_PX;
 
+  // create overlays aligned to each day column
   const overlays = [];
   for (let day = 0; day < 7; day++) {
     const firstSlot = calGrid.querySelector(`.slot[data-day="${day}"][data-tmin="${dayMin0}"]`);
     if (!firstSlot) continue;
-    const r = firstSlot.getBoundingClientRect();
 
+    const r = firstSlot.getBoundingClientRect();
     const overlay = document.createElement("div");
     overlay.className = "dayOverlay";
     overlay.style.top = `${overlayTop}px`;
@@ -419,7 +429,7 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
     overlay.style.height = `${overlayHeight}px`;
 
     calGrid.appendChild(overlay);
-    overlays.push({ day, overlay, colRect: r });
+    overlays.push({ day, overlay });
   }
 
   // render scheduled events into each overlay with overlap layout
@@ -452,33 +462,41 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
 
       // clip to visible range
       const topMin = Math.max(e.startMin, dayMin0);
-      const botMin = Math.min(e.endMin, END_HOUR*60);
+      const botMin = Math.min(e.endMin, END_HOUR * 60);
 
       const top = ((topMin - dayMin0) / SLOT_MIN) * ROW_PX + 3;
       const height = Math.max(18, ((botMin - topMin) / SLOT_MIN) * ROW_PX - 6);
 
-      const leftPct = (e.col / e.cols) * 100;
-      const widthPct = (1 / e.cols) * 100;
+      // ✅ FIXED: pixel-column layout (no overflow + perfect fill)
+      const gap = 6;
+      const W = overlay.clientWidth;
+      const cols = Math.max(1, e.cols);
+
+      const colW = Math.max(20, Math.floor((W - gap * (cols + 1)) / cols));
+      const left = gap + e.col * (colW + gap);
+      const width = (e.col === cols - 1) ? (W - left - gap) : colW;
 
       const node = document.createElement("div");
       node.className = "event";
       node.style.top = `${top}px`;
       node.style.height = `${height}px`;
-      node.style.left = `calc(${leftPct}% + 4px)`;
-      node.style.width = `calc(${widthPct}% - 8px)`;
+      node.style.left = `${left}px`;
+      node.style.width = `${Math.max(20, width)}px`;
 
       const st = new Date(t.startISO);
       node.innerHTML = `<div class="t">${escapeHTML(t.title)}</div>
                         <div class="s">${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${(t.durationMin||60)}m</div>`;
       node.onclick = (evt) => { evt.stopPropagation(); openEditTask(t.id); };
+
       overlay.appendChild(node);
     }
   }
 
+  // overlap layout: greedy columns + union overlap components to compute cols per component
   function layoutDayEvents(events) {
     const n = events.length;
     if (n === 0) return [];
-    // greedy columns + union overlaps to compute component width
+
     const parent = Array.from({length:n}, (_,i)=>i);
     const find = (x)=> (parent[x]===x?x:(parent[x]=find(parent[x])));
     const uni = (a,b)=>{ a=find(a); b=find(b); if(a!==b) parent[b]=a; };
@@ -489,11 +507,15 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
 
     for (let i=0;i<n;i++) {
       const cur = events[i];
+
+      // remove inactive
       for (let k=active.length-1;k>=0;k--) {
         if (active[k].endMin <= cur.startMin) active.splice(k,1);
       }
+      // union overlaps
       for (const a of active) uni(a.idx, i);
 
+      // assign first free column
       let col = 0;
       while (col < colEnds.length && colEnds[col] > cur.startMin) col++;
       if (col === colEnds.length) colEnds.push(cur.endMin);
@@ -503,6 +525,7 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
       active.push({ idx: i, endMin: cur.endMin });
     }
 
+    // max cols per overlap component
     const maxCol = new Map();
     for (let i=0;i<n;i++) {
       const root = find(i);
