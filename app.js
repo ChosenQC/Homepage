@@ -7,9 +7,9 @@ const END_SET      = "/api/todos/set";
 
 // Calendar config
 const WEEK_START = 0;        // 0=Sunday
-const START_HOUR = 7;        // 07:00
-const END_HOUR   = 22;       // 22:00
-const SLOT_MIN   = 30;       // 30-min slots
+const START_HOUR = 8;   // 08:00
+const END_HOUR   = 20;  // 20:00
+const SLOT_MIN   = 60;  //
 
 // local keys
 const kUser = "todo_v5_user";
