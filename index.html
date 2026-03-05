@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TODO</title>
+  <title>TODO Calendar</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -21,7 +21,7 @@
       </div>
 
       <p class="muted small" style="margin-top:8px">
-        站点口令用于访问 Worker（相当于“进站钥匙”）；用户密码用于区分不同用户。
+        站点口令用于访问 Worker（SITE_SECRET）；用户密码用于区分不同用户。
       </p>
 
       <div class="row">
@@ -41,18 +41,9 @@
       </div>
 
       <div class="row">
-        <label class="checkbox">
-          <input id="rememberUser" type="checkbox" />
-          <span>记住用户名</span>
-        </label>
-        <label class="checkbox">
-          <input id="rememberSite" type="checkbox" />
-          <span>记住站点口令</span>
-        </label>
-        <label class="checkbox">
-          <input id="rememberPw" type="checkbox" />
-          <span>记住用户密码</span>
-        </label>
+        <label class="checkbox"><input id="rememberUser" type="checkbox" /><span>记住用户名</span></label>
+        <label class="checkbox"><input id="rememberSite" type="checkbox" /><span>记住站点口令</span></label>
+        <label class="checkbox"><input id="rememberPw" type="checkbox" /><span>记住用户密码</span></label>
       </div>
 
       <div class="row">
@@ -62,35 +53,97 @@
       <p id="authMsg" class="msg"></p>
     </section>
 
-    <!-- 应用区 -->
+    <!-- App -->
     <section id="appView" class="card hidden">
-      <div class="row space-between">
+      <div class="row space-between" style="margin-top:0">
         <div>
-          <h2 id="helloTitle">Hi</h2>
-          <p class="muted">数据存在 GitHub Issue 中，通过 Worker 同步。</p>
+          <h2 id="helloTitle" style="margin:0">Hi</h2>
+          <p class="muted">周视图（日历任务）+ 侧边栏优先级（拖拽）。</p>
         </div>
-        <div class="row">
+        <div class="row" style="margin-top:0">
+          <button id="prevWeekBtn" class="ghost">← 上一周</button>
+          <button id="todayBtn" class="ghost">今天</button>
+          <button id="nextWeekBtn" class="ghost">下一周 →</button>
           <button id="syncBtn" class="ghost">同步</button>
           <button id="logoutBtn" class="ghost">退出</button>
         </div>
       </div>
 
-      <div class="row">
-        <input id="newTodoInput" placeholder="添加一个 todo，比如：写论文" />
-        <input id="newDeadlineInput" type="date" />
-        <button id="addBtn">添加</button>
+      <div class="layout">
+        <!-- Calendar -->
+        <section class="calendar card2">
+          <div class="calTop">
+            <div class="weekTitle" id="weekTitle"></div>
+            <div class="muted small">点击某个时间格添加任务；拖动侧边栏可改优先级。</div>
+          </div>
+
+          <div class="calGrid" id="calGrid">
+            <!-- JS render -->
+          </div>
+        </section>
+
+        <!-- Sidebar -->
+        <aside class="sidebar card2">
+          <div class="sideTop">
+            <div class="sideTitle">优先级</div>
+            <div class="muted small">默认按时间顺序；可拖拽排序。</div>
+          </div>
+
+          <div class="sideActions row" style="margin-top:10px">
+            <button id="newDeadlineBtn">+ 新建 Deadline</button>
+          </div>
+
+          <ul id="priorityList" class="plist"></ul>
+          <p id="appMsg" class="muted small"></p>
+        </aside>
       </div>
-
-      <ul id="todoList" class="list"></ul>
-
-      <p class="muted small">
-        操作：勾选完成；点标题编辑（Enter 保存 / Esc 取消）；改日期更新 deadline；删除按钮删除。
-      </p>
-      <p id="appMsg" class="muted small"></p>
     </section>
   </main>
 
-  <!-- 强烈建议加版本号避免缓存 -->
-  <script src="./app.js?v=20260305-1"></script>
+  <!-- Modal -->
+  <div id="modalOverlay" class="modalOverlay hidden">
+    <div class="modal card">
+      <div class="row space-between" style="margin-top:0">
+        <h3 id="modalTitle" style="margin:0">新建任务</h3>
+        <button id="modalCloseBtn" class="ghost">关闭</button>
+      </div>
+
+      <div class="row">
+        <input id="taskTitleInput" placeholder="任务标题" />
+      </div>
+
+      <div class="row">
+        <label class="checkbox"><input id="taskIsDeadline" type="checkbox" /><span>这是 Deadline 任务（不占日历格）</span></label>
+      </div>
+
+      <div id="scheduledFields">
+        <div class="row">
+          <div class="muted small" style="min-width:120px">开始时间</div>
+          <input id="taskStartInput" type="datetime-local" />
+        </div>
+
+        <div class="row">
+          <div class="muted small" style="min-width:120px">时长（分钟）</div>
+          <input id="taskDurInput" type="number" min="15" step="15" value="60" />
+        </div>
+      </div>
+
+      <div id="deadlineFields" class="hidden">
+        <div class="row">
+          <div class="muted small" style="min-width:120px">Deadline</div>
+          <input id="taskDeadlineInput" type="datetime-local" />
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="modalSaveBtn">保存</button>
+        <button id="modalDeleteBtn" class="del hidden">删除</button>
+      </div>
+
+      <p id="modalMsg" class="msg"></p>
+    </div>
+  </div>
+
+  <script src="./app.js?v=20260305-2"></script>
 </body>
 </html>
