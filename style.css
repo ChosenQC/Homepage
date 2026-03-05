@@ -32,7 +32,8 @@ button.ghost { background: transparent; }
   grid-template-columns: 72px repeat(7, 1fr);
   border: 1px solid #1f2b45;
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;            /* 让 overlay/event 不被裁剪 */
+  position: relative;
 }
 
 /* header row */
@@ -137,3 +138,17 @@ button.ghost { background: transparent; }
   padding: 16px;
 }
 .modal { width: min(520px, 100%); }
+
+/* 每天一列的事件覆盖层：覆盖整天的时间行 */
+.dayOverlay {
+  position: relative;
+  z-index: 5;
+  pointer-events: none;         /* 不挡住底下格子的点击 */
+}
+
+/* 事件块在 overlay 上绝对定位 */
+.event {
+  position: absolute;
+  z-index: 10;
+  pointer-events: auto;         /* 事件本身可点击编辑 */
+}
