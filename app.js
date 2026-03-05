@@ -358,7 +358,7 @@ function renderCalendar() {
 
   // header row
   calGrid.appendChild(div("cellH", "")); // top-left empty
-  for (let i=0;i<7;i++) {
+  for (let i = 0; i < 7; i++) {
     const d = addDays(week0, i);
     const name = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
     const h = div("cellH", "");
@@ -366,14 +366,14 @@ function renderCalendar() {
     hdr.className = "dayHeader";
     hdr.innerHTML = `<div class="d1">${name}</div><div class="d2">${toISODate(d)}</div>`;
 
-    // deadline chips for that day
+    // deadline chips
     const chips = document.createElement("div");
     chips.className = "dayDeadline";
     const dayKey = toISODate(d);
     const deadlines = store.tasks
       .filter(t => t.type === "deadline" && toISODate(new Date(t.deadlineISO)) === dayKey)
       .sort((a,b)=>taskTimeKey(a)-taskTimeKey(b))
-      .slice(0, 4); // avoid clutter
+      .slice(0, 4);
     for (const t of deadlines) {
       const c = document.createElement("span");
       c.className = "deadChip";
@@ -391,23 +391,17 @@ function renderCalendar() {
   // time slots
   const totalMin = (END_HOUR - START_HOUR) * 60;
   const rows = Math.floor(totalMin / SLOT_MIN);
+  const ROW_PX = 28;                 // 与 CSS slot min-height 对齐（你现在是 28px）
+  const dayMin0 = START_HOUR * 60;
 
-  // precompute scheduled tasks in this week
-  const weekStartTs = week0.getTime();
-  const weekEndTs = addDays(week0, 7).getTime();
-
-  const scheduled = store.tasks.filter(t => t.type === "scheduled").filter(t => {
-    const st = new Date(t.startISO).getTime();
-    return st >= weekStartTs && st < weekEndTs;
-  });
-
-  for (let r=0;r<rows;r++) {
-    const tMin = START_HOUR*60 + r*SLOT_MIN;
-    const hh = Math.floor(tMin/60);
-    const mm = tMin%60;
+  // background grid (time label + slots)
+  for (let r = 0; r < rows; r++) {
+    const tMin = dayMin0 + r * SLOT_MIN;
+    const hh = Math.floor(tMin / 60);
+    const mm = tMin % 60;
     calGrid.appendChild(div("timeCell", `${pad2(hh)}:${pad2(mm)}`));
 
-    for (let day=0;day<7;day++) {
+    for (let day = 0; day < 7; day++) {
       const cell = document.createElement("div");
       cell.className = "slot";
       cell.dataset.day = String(day);
@@ -420,28 +414,125 @@ function renderCalendar() {
         openCreateScheduled(start);
       };
 
-      // render events that start in this slot
-      const dayDate = addDays(week0, day);
-      const dayKey = toISODate(dayDate);
-
-      const eventsHere = scheduled.filter(t => {
-        const st = new Date(t.startISO);
-        return toISODate(st) === dayKey && minutesSinceStart(st) === tMin;
-      });
-
-      for (const ev of eventsHere) {
-        const st = new Date(ev.startISO);
-        const height = Math.max(1, Math.round(ev.durationMin / SLOT_MIN)) * 28 - 6; // 28px per slot
-        const e = document.createElement("div");
-        e.className = "event";
-        e.style.height = `${height}px`;
-        e.innerHTML = `<div class="t">${escapeHTML(ev.title)}</div><div class="s">${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${ev.durationMin}m</div>`;
-        e.onclick = (evt) => { evt.stopPropagation(); openEditTask(ev.id); };
-        cell.appendChild(e);
-      }
-
       calGrid.appendChild(cell);
     }
+  }
+
+  // ---- overlay columns (one per day) ----
+  // grid rows: 1 header + rows time rows
+  // overlay should cover row 2..(rows+1)
+  for (let day = 0; day < 7; day++) {
+    const overlay = document.createElement("div");
+    overlay.className = "dayOverlay";
+    overlay.style.gridColumn = String(day + 2);          // col 1 is time
+    overlay.style.gridRow = `2 / ${rows + 2}`;           // start at row 2, end after last row
+    calGrid.appendChild(overlay);
+
+    // render scheduled events for this day in overlay
+    const dayDate = addDays(week0, day);
+    const dayKey = toISODate(dayDate);
+
+    const events = store.tasks
+      .filter(t => t.type === "scheduled")
+      .map(t => {
+        const st = new Date(t.startISO);
+        return { task: t, st, end: new Date(st.getTime() + (t.durationMin||60)*60000) };
+      })
+      .filter(x => toISODate(x.st) === dayKey)
+      // clip to visible hours (optional)
+      .map(x => {
+        const startMin = x.st.getHours()*60 + x.st.getMinutes();
+        const endMin = startMin + (x.task.durationMin||60);
+        return { ...x, startMin, endMin };
+      })
+      .filter(x => x.endMin > dayMin0 && x.startMin < (END_HOUR*60))
+      .sort((a,b) => xcmp(a,b));
+
+    // layout overlaps -> assign columns
+    const laid = layoutDayEvents(events);
+
+    // draw
+    for (const e of laid) {
+      const t = e.task;
+
+      // position within visible range
+      const topMin = Math.max(e.startMin, dayMin0);
+      const botMin = Math.min(e.endMin, END_HOUR*60);
+      const top = ((topMin - dayMin0) / SLOT_MIN) * ROW_PX + 3;
+      const height = Math.max(18, ((botMin - topMin) / SLOT_MIN) * ROW_PX - 6);
+
+      const leftPct = (e.col / e.cols) * 100;
+      const widthPct = (1 / e.cols) * 100;
+
+      const node = document.createElement("div");
+      node.className = "event";
+      node.style.top = `${top}px`;
+      node.style.height = `${height}px`;
+      node.style.left = `calc(${leftPct}% + 4px)`;
+      node.style.width = `calc(${widthPct}% - 8px)`;
+
+      const st = new Date(t.startISO);
+      node.innerHTML = `<div class="t">${escapeHTML(t.title)}</div>
+                        <div class="s">${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${t.durationMin}m</div>`;
+      node.onclick = (evt) => { evt.stopPropagation(); openEditTask(t.id); };
+
+      overlay.appendChild(node);
+    }
+  }
+
+  function xcmp(a,b){
+    if (a.startMin !== b.startMin) return a.startMin - b.startMin;
+    return a.endMin - b.endMin;
+  }
+
+  // interval partition + component max cols
+  function layoutDayEvents(events) {
+    // Union-Find for overlap components
+    const n = events.length;
+    const parent = Array.from({length:n}, (_,i)=>i);
+    const find = (x)=> (parent[x]===x?x:(parent[x]=find(parent[x])));
+    const uni = (a,b)=>{ a=find(a); b=find(b); if(a!==b) parent[b]=a; };
+
+    // sweep to union overlaps + assign columns greedily
+    const colEnds = [];           // endMin per column
+    const colOf = Array(n).fill(0);
+
+    // active list for union (store indices with endMin)
+    const active = [];
+
+    for (let i=0;i<n;i++) {
+      const cur = events[i];
+
+      // remove inactive from active
+      for (let k=active.length-1;k>=0;k--) {
+        if (active[k].endMin <= cur.startMin) active.splice(k,1);
+      }
+      // union with all active (overlaps)
+      for (const a of active) uni(a.idx, i);
+
+      // assign first free column
+      let col = 0;
+      while (col < colEnds.length && colEnds[col] > cur.startMin) col++;
+      if (col === colEnds.length) colEnds.push(cur.endMin);
+      else colEnds[col] = cur.endMin;
+      colOf[i] = col;
+
+      active.push({ idx: i, endMin: cur.endMin });
+    }
+
+    // compute cols per component = max(col)+1 within component
+    const maxCol = new Map();
+    for (let i=0;i<n;i++) {
+      const root = find(i);
+      const c = colOf[i] + 1;
+      maxCol.set(root, Math.max(maxCol.get(root)||0, c));
+    }
+
+    return events.map((ev, i) => ({
+      ...ev,
+      col: colOf[i],
+      cols: maxCol.get(find(i)) || 1,
+    }));
   }
 }
 
