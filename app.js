@@ -169,6 +169,27 @@ function deadlineBadge(deadlineISO) {
   return { text: "DDL", cls: "badge" };
 }
 
+/**
+ * ✅ 关键：解包 Worker/Issue 里可能存在的 wrapper 结构
+ * 支持：
+ * - version:2 store
+ * - legacy array
+ * - wrapper: { ..., todos: <真实内容> } （可能套多层）
+ */
+function unwrapTodos(x) {
+  let cur = x;
+  for (let i = 0; i < 6; i++) {
+    if (!cur) break;
+    if (Array.isArray(cur)) return cur;
+    if (typeof cur === "object") {
+      if (cur.version === 2 && Array.isArray(cur.tasks) && Array.isArray(cur.priority)) return cur;
+      if (cur.todos !== undefined) { cur = cur.todos; continue; }
+    }
+    break;
+  }
+  return x;
+}
+
 // ---------- API ----------
 async function api(path, payload) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -183,9 +204,10 @@ async function api(path, payload) {
 }
 async function doRegister(u, site, pw) { return await api(END_REGISTER, { site_secret: site, username: u, user_password: pw }); }
 async function doLogin(u, site, pw) { return await api(END_LOGIN, { site_secret: site, username: u, user_password: pw }); }
+
 async function remoteGetStore(u, site, pw) {
   const data = await api(END_GET, { site_secret: site, username: u, user_password: pw });
-  return data.todos || null;
+  return unwrapTodos(data.todos);
 }
 async function remoteSetStore(u, site, pw, value) {
   await api(END_SET, { site_secret: site, username: u, user_password: pw, todos: value });
@@ -193,6 +215,7 @@ async function remoteSetStore(u, site, pw, value) {
 
 // ---------- store normalize ----------
 function normalizeStore(raw) {
+  raw = unwrapTodos(raw);
   if (!raw) return { version: 2, tasks: [], priority: [] };
 
   if (Array.isArray(raw)) {
@@ -223,8 +246,6 @@ function ensurePriorityComplete() {
 
 /**
  * ✅ FIXED: insert into priority without duplication
- * - remove existing id first
- * - insert by time key
  */
 function insertByTimeDefault(newTask) {
   store.priority = store.priority.filter(id => id !== newTask.id);
@@ -287,6 +308,7 @@ const handleAuth = withBusy(async () => {
     }
 
     const data = await doLogin(u, site, pw);
+    // ✅ data.todos 可能是 wrapper，需要 normalizeStore 解包
     await enterApp(u, site, pw, data.todos);
     setAuthMsg("");
     userPw2Input.value = "";
@@ -334,7 +356,6 @@ function renderAll() {
 }
 
 function renderCalendar() {
-  // remove any existing overlays before rebuilding
   calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
 
   const week0 = startOfWeek(viewDate);
@@ -399,12 +420,10 @@ function renderCalendar() {
     }
   }
 
-  // overlays need DOM measurements after render
   requestAnimationFrame(() => drawOverlaysAndEvents(week0, rows, dayMin0));
 }
 
 function drawOverlaysAndEvents(week0, rows, dayMin0) {
-  // clear old overlays
   calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
 
   const headerCell = calGrid.querySelector(".cellH");
@@ -414,7 +433,6 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
   const overlayTop = headerH;
   const overlayHeight = rows * ROW_PX;
 
-  // create overlays aligned to each day column
   const overlays = [];
   for (let day = 0; day < 7; day++) {
     const firstSlot = calGrid.querySelector(`.slot[data-day="${day}"][data-tmin="${dayMin0}"]`);
@@ -432,7 +450,6 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
     overlays.push({ day, overlay });
   }
 
-  // render scheduled events into each overlay with overlap layout
   const weekStartTs = week0.getTime();
   const weekEndTs = addDays(week0, 7).getTime();
 
@@ -467,32 +484,40 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
       const top = ((topMin - dayMin0) / SLOT_MIN) * ROW_PX + 3;
       const height = Math.max(18, ((botMin - topMin) / SLOT_MIN) * ROW_PX - 6);
 
-      // ✅ FIXED: pixel-column layout (no overflow + perfect fill)
+      // ✅ FIX (2)(3): 用 left+right 保证不溢出；并列任务自动平分填满
       const gap = 6;
       const W = overlay.clientWidth;
       const cols = Math.max(1, e.cols);
 
-      const colW = Math.max(20, Math.floor((W - gap * (cols + 1)) / cols));
+      const usable = Math.max(0, W - gap * (cols + 1));
+      const colW = usable / cols;
+
       const left = gap + e.col * (colW + gap);
-      const width = (e.col === cols - 1) ? (W - left - gap) : colW;
+      const right = gap + (cols - 1 - e.col) * (colW + gap);
 
       const node = document.createElement("div");
       node.className = "event";
-      node.style.top = `${top}px`;
-      node.style.height = `${height}px`;
-      node.style.left = `${left}px`;
-      node.style.width = `${Math.max(20, width)}px`;
+      node.style.top = `${Math.round(top)}px`;
+      node.style.height = `${Math.round(height)}px`;
+      node.style.left = `${Math.round(left)}px`;
+      node.style.right = `${Math.round(right)}px`;
+      node.style.width = "auto";
 
       const st = new Date(t.startISO);
       node.innerHTML = `<div class="t">${escapeHTML(t.title)}</div>
                         <div class="s">${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${(t.durationMin||60)}m</div>`;
-      node.onclick = (evt) => { evt.stopPropagation(); openEditTask(t.id); };
+
+      // ✅ FIX (3): Shift+Click 在同一开始时间新增一个任务
+      node.onclick = (evt) => {
+        evt.stopPropagation();
+        if (evt.shiftKey) openCreateScheduled(new Date(t.startISO));
+        else openEditTask(t.id);
+      };
 
       overlay.appendChild(node);
     }
   }
 
-  // overlap layout: greedy columns + union overlap components to compute cols per component
   function layoutDayEvents(events) {
     const n = events.length;
     if (n === 0) return [];
@@ -508,14 +533,11 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
     for (let i=0;i<n;i++) {
       const cur = events[i];
 
-      // remove inactive
       for (let k=active.length-1;k>=0;k--) {
         if (active[k].endMin <= cur.startMin) active.splice(k,1);
       }
-      // union overlaps
       for (const a of active) uni(a.idx, i);
 
-      // assign first free column
       let col = 0;
       while (col < colEnds.length && colEnds[col] > cur.startMin) col++;
       if (col === colEnds.length) colEnds.push(cur.endMin);
@@ -525,7 +547,6 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
       active.push({ idx: i, endMin: cur.endMin });
     }
 
-    // max cols per overlap component
     const maxCol = new Map();
     for (let i=0;i<n;i++) {
       const root = find(i);
@@ -728,7 +749,6 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
         if (!dur || dur < 15) { setModalMsg("时长至少 15 分钟。"); return; }
         store.tasks[idx] = { id: old.id, type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, updatedAt: now };
       }
-      // priority order unchanged
     }
 
     ensurePriorityComplete();
@@ -786,7 +806,6 @@ toRegisterBtn.addEventListener("click", () => setMode("register"));
 
   viewDate = new Date();
 
-  // keep overlays aligned on resize
   window.addEventListener("resize", () => {
     if (!appView.classList.contains("hidden")) renderCalendar();
   });
