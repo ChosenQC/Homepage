@@ -170,24 +170,58 @@ function deadlineBadge(deadlineISO) {
 }
 
 /**
- * ✅ 关键：解包 Worker/Issue 里可能存在的 wrapper 结构
- * 支持：
- * - version:2 store
- * - legacy array
- * - wrapper: { ..., todos: <真实内容> } （可能套多层）
+ * ✅ (1) 修复“重新登录任务消失”：
+ * Worker/Issue 可能返回 string / ```json ...``` / wrapper 套娃，
+ * 这里尽最大努力解析成 object/array。
  */
+function parseTodosMaybe(x) {
+  if (x == null) return x;
+  if (typeof x === "object") return x;
+  if (typeof x !== "string") return x;
+
+  let s = x.trim();
+
+  // 去掉 ```json ... ``` / ``` ... ```
+  if (s.startsWith("```")) {
+    s = s.replace(/^```[a-zA-Z]*\n?/, "");
+    s = s.replace(/```$/, "");
+    s = s.trim();
+  }
+
+  // 尝试截取 JSON 对象或数组片段
+  const fb = s.indexOf("{"), lb = s.lastIndexOf("}");
+  const fbr = s.indexOf("["), lbr = s.lastIndexOf("]");
+
+  if (fb !== -1 && lb !== -1 && lb > fb) {
+    const maybe = s.slice(fb, lb + 1);
+    try { return JSON.parse(maybe); } catch {}
+  }
+  if (fbr !== -1 && lbr !== -1 && lbr > fbr) {
+    const maybe = s.slice(fbr, lbr + 1);
+    try { return JSON.parse(maybe); } catch {}
+  }
+
+  try { return JSON.parse(s); } catch {}
+  return x;
+}
+
 function unwrapTodos(x) {
   let cur = x;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
+    cur = parseTodosMaybe(cur);
+
     if (!cur) break;
     if (Array.isArray(cur)) return cur;
+
     if (typeof cur === "object") {
       if (cur.version === 2 && Array.isArray(cur.tasks) && Array.isArray(cur.priority)) return cur;
       if (cur.todos !== undefined) { cur = cur.todos; continue; }
+      if (cur.data !== undefined) { cur = cur.data; continue; }
+      if (cur.payload !== undefined) { cur = cur.payload; continue; }
     }
     break;
   }
-  return x;
+  return cur;
 }
 
 // ---------- API ----------
@@ -207,7 +241,7 @@ async function doLogin(u, site, pw) { return await api(END_LOGIN, { site_secret:
 
 async function remoteGetStore(u, site, pw) {
   const data = await api(END_GET, { site_secret: site, username: u, user_password: pw });
-  return unwrapTodos(data.todos);
+  return unwrapTodos(data.todos || null);
 }
 async function remoteSetStore(u, site, pw, value) {
   await api(END_SET, { site_secret: site, username: u, user_password: pw, todos: value });
@@ -245,7 +279,7 @@ function ensurePriorityComplete() {
 }
 
 /**
- * ✅ FIXED: insert into priority without duplication
+ * ✅ insert into priority without duplication
  */
 function insertByTimeDefault(newTask) {
   store.priority = store.priority.filter(id => id !== newTask.id);
@@ -308,7 +342,6 @@ const handleAuth = withBusy(async () => {
     }
 
     const data = await doLogin(u, site, pw);
-    // ✅ data.todos 可能是 wrapper，需要 normalizeStore 解包
     await enterApp(u, site, pw, data.todos);
     setAuthMsg("");
     userPw2Input.value = "";
@@ -356,6 +389,7 @@ function renderAll() {
 }
 
 function renderCalendar() {
+  // remove any existing overlays before rebuilding
   calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
 
   const week0 = startOfWeek(viewDate);
@@ -420,10 +454,12 @@ function renderCalendar() {
     }
   }
 
+  // overlays need DOM measurements after render
   requestAnimationFrame(() => drawOverlaysAndEvents(week0, rows, dayMin0));
 }
 
 function drawOverlaysAndEvents(week0, rows, dayMin0) {
+  // clear old overlays
   calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
 
   const headerCell = calGrid.querySelector(".cellH");
@@ -433,6 +469,7 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
   const overlayTop = headerH;
   const overlayHeight = rows * ROW_PX;
 
+  // create overlays aligned to each day column
   const overlays = [];
   for (let day = 0; day < 7; day++) {
     const firstSlot = calGrid.querySelector(`.slot[data-day="${day}"][data-tmin="${dayMin0}"]`);
@@ -450,6 +487,7 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
     overlays.push({ day, overlay });
   }
 
+  // render scheduled events into each overlay with overlap layout
   const weekStartTs = week0.getTime();
   const weekEndTs = addDays(week0, 7).getTime();
 
@@ -484,7 +522,7 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
       const top = ((topMin - dayMin0) / SLOT_MIN) * ROW_PX + 3;
       const height = Math.max(18, ((botMin - topMin) / SLOT_MIN) * ROW_PX - 6);
 
-      // ✅ FIX (2)(3): 用 left+right 保证不溢出；并列任务自动平分填满
+      // ✅ (2)(3) 用 left+right 约束，永不溢出；并列任务自动平分填满
       const gap = 6;
       const W = overlay.clientWidth;
       const cols = Math.max(1, e.cols);
@@ -507,7 +545,7 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
       node.innerHTML = `<div class="t">${escapeHTML(t.title)}</div>
                         <div class="s">${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${(t.durationMin||60)}m</div>`;
 
-      // ✅ FIX (3): Shift+Click 在同一开始时间新增一个任务
+      // ✅ Shift+Click: 新建同一开始时间任务
       node.onclick = (evt) => {
         evt.stopPropagation();
         if (evt.shiftKey) openCreateScheduled(new Date(t.startISO));
@@ -518,6 +556,7 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
     }
   }
 
+  // overlap layout: greedy columns + union overlap components to compute cols per component
   function layoutDayEvents(events) {
     const n = events.length;
     if (n === 0) return [];
@@ -533,11 +572,14 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
     for (let i=0;i<n;i++) {
       const cur = events[i];
 
+      // remove inactive
       for (let k=active.length-1;k>=0;k--) {
         if (active[k].endMin <= cur.startMin) active.splice(k,1);
       }
+      // union overlaps
       for (const a of active) uni(a.idx, i);
 
+      // assign first free column
       let col = 0;
       while (col < colEnds.length && colEnds[col] > cur.startMin) col++;
       if (col === colEnds.length) colEnds.push(cur.endMin);
@@ -547,6 +589,7 @@ function drawOverlaysAndEvents(week0, rows, dayMin0) {
       active.push({ idx: i, endMin: cur.endMin });
     }
 
+    // max cols per overlap component
     const maxCol = new Map();
     for (let i=0;i<n;i++) {
       const root = find(i);
@@ -806,6 +849,7 @@ toRegisterBtn.addEventListener("click", () => setMode("register"));
 
   viewDate = new Date();
 
+  // keep overlays aligned on resize
   window.addEventListener("resize", () => {
     if (!appView.classList.contains("hidden")) renderCalendar();
   });
