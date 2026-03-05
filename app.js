@@ -1,25 +1,36 @@
 // ================== 你只需要改这里 ==================
-const API_BASE = "https://floral-flower-7c16.chen-qiu.workers.dev"; 
+const API_BASE = "https://floral-flower-7c16.chen-qiu.workers.dev";
+// ====================================================
 
+const END_REGISTER = "/api/auth/register";
+const END_LOGIN    = "/api/auth/login";
+const END_GET      = "/api/todos/get";
+const END_SET      = "/api/todos/set";
 
-// Worker endpoints
-const END_GET = "/api/todos/get";
-const END_SET = "/api/todos/set";
+// local keys
+const kUser = "todo_v4_user";
+const kSite = "todo_v4_site";
+const kPw   = "todo_v4_pw";
+const kSess = "todo_v4_session"; // session marker
 
-// local/session keys
-const sessionUserKey = "todo_v3_session_user";
-const savedPwKey = (u) => `todo_v3_saved_pw_${u}`;
-
-// DOM
-const loginView = document.getElementById("loginView");
-const appView = document.getElementById("appView");
-
+// DOM (auth)
+const authView = document.getElementById("authView");
+const authTitle = document.getElementById("authTitle");
+const toLoginBtn = document.getElementById("toLoginBtn");
+const toRegisterBtn = document.getElementById("toRegisterBtn");
 const usernameInput = document.getElementById("usernameInput");
-const passwordInput = document.getElementById("passwordInput");
+const siteSecretInput = document.getElementById("siteSecretInput");
+const userPwInput = document.getElementById("userPwInput");
+const userPw2Row = document.getElementById("userPw2Row");
+const userPw2Input = document.getElementById("userPw2Input");
+const rememberUser = document.getElementById("rememberUser");
+const rememberSite = document.getElementById("rememberSite");
 const rememberPw = document.getElementById("rememberPw");
-const loginBtn = document.getElementById("loginBtn");
-const loginMsg = document.getElementById("loginMsg");
+const authBtn = document.getElementById("authBtn");
+const authMsg = document.getElementById("authMsg");
 
+// DOM (app)
+const appView = document.getElementById("appView");
 const helloTitle = document.getElementById("helloTitle");
 const logoutBtn = document.getElementById("logoutBtn");
 const syncBtn = document.getElementById("syncBtn");
@@ -31,39 +42,43 @@ const todoList = document.getElementById("todoList");
 const appMsg = document.getElementById("appMsg");
 
 // state
-let currentUser = null;
-let siteSecret = null;
-let todos = [];
+let mode = "login"; // "login" | "register"
 let busy = false;
 
-// ------------------ helpers ------------------
+let username = null;
+let siteSecret = null;
+let userPassword = null;
+let todos = [];
+
+// ---------- UI helpers ----------
 function setView(isAuthed) {
-  loginView.classList.toggle("hidden", isAuthed);
+  authView.classList.toggle("hidden", isAuthed);
   appView.classList.toggle("hidden", !isAuthed);
 }
-
-function showLoginMsg(s) { loginMsg.textContent = s || ""; }
-function showAppMsg(s) { appMsg.textContent = s || ""; }
+function setMode(m) {
+  mode = m;
+  const isReg = mode === "register";
+  authTitle.textContent = isReg ? "注册" : "登录";
+  authBtn.textContent = isReg ? "注册" : "登录";
+  userPw2Row.classList.toggle("hidden", !isReg);
+  setAuthMsg("");
+}
+function setAuthMsg(s) { authMsg.textContent = s || ""; }
+function setAppMsg(s) { appMsg.textContent = s || ""; }
 
 function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
-
 function todayISO() {
   const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
-
 function compareISODate(a, b) {
   if (!a && !b) return 0;
   if (!a) return 1;
   if (!b) return -1;
   return a.localeCompare(b);
 }
-
 function withBusy(fn) {
   return async (...args) => {
     if (busy) return;
@@ -72,37 +87,63 @@ function withBusy(fn) {
     finally { busy = false; }
   };
 }
+function validUsername(u) {
+  return /^[a-zA-Z0-9_-]{1,32}$/.test(u);
+}
 
-// ------------------ API ------------------
+// ---------- API ----------
 async function api(path, payload) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-
   let data = {};
   try { data = await res.json(); } catch {}
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
 
-async function remoteGetTodos(username, password) {
-  const data = await api(END_GET, { username, password });
+async function doRegister(u, site, pw) {
+  return await api(END_REGISTER, {
+    site_secret: site,
+    username: u,
+    user_password: pw,
+  });
+}
+
+async function doLogin(u, site, pw) {
+  // 后端 login 会返回 todos（我们 Worker 代码就是这么写的）
+  return await api(END_LOGIN, {
+    site_secret: site,
+    username: u,
+    user_password: pw,
+  });
+}
+
+async function remoteGetTodos(u, site, pw) {
+  const data = await api(END_GET, {
+    site_secret: site,
+    username: u,
+    user_password: pw,
+  });
   return data.todos || [];
 }
 
-async function remoteSetTodos(username, password, list) {
-  await api(END_SET, { username, password, todos: list });
+async function remoteSetTodos(u, site, pw, list) {
+  await api(END_SET, {
+    site_secret: site,
+    username: u,
+    user_password: pw,
+    todos: list,
+  });
 }
 
-// ------------------ render ------------------
+// ---------- render ----------
 function deadlineBadge(deadline) {
-  if (!deadline) return null;
-
+  if (!deadline) return { text: "无截止日期", cls: "badge" };
   const t = todayISO();
   if (deadline < t) return { text: `逾期 ${deadline}`, cls: "badge overdue" };
-
   const dt = new Date(deadline + "T00:00:00");
   const now = new Date(t + "T00:00:00");
   const diffDays = Math.round((dt - now) / (1000 * 60 * 60 * 24));
@@ -142,12 +183,10 @@ function render() {
       title.setAttribute("contenteditable", "true");
       title.focus();
     });
-
     title.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); title.blur(); }
       if (e.key === "Escape") { e.preventDefault(); title.textContent = t.title; title.blur(); }
     });
-
     title.addEventListener("blur", withBusy(async () => {
       title.removeAttribute("contenteditable");
       const newText = (title.textContent || "").trim();
@@ -172,8 +211,8 @@ function render() {
 
     const badgeInfo = deadlineBadge(t.deadline);
     const badge = document.createElement("span");
-    badge.className = badgeInfo ? badgeInfo.cls : "badge";
-    badge.textContent = badgeInfo ? badgeInfo.text : "无截止日期";
+    badge.className = badgeInfo.cls;
+    badge.textContent = badgeInfo.text;
 
     const del = document.createElement("button");
     del.className = "del";
@@ -193,18 +232,19 @@ function render() {
   }
 }
 
-// ------------------ sync/persist ------------------
+// ---------- persist/sync ----------
 async function persist() {
-  showAppMsg("保存中…");
-  await remoteSetTodos(currentUser, siteSecret, todos);
-  showAppMsg("已保存 ✅");
-  setTimeout(() => showAppMsg(""), 900);
+  setAppMsg("保存中…");
+  await remoteSetTodos(username, siteSecret, userPassword, todos);
+  setAppMsg("已保存 ✅");
+  setTimeout(() => setAppMsg(""), 900);
 }
 
 const syncFromRemote = withBusy(async () => {
-  showAppMsg("同步中…");
-  const remote = await remoteGetTodos(currentUser, siteSecret);
+  setAppMsg("同步中…");
+  const remote = await remoteGetTodos(username, siteSecret, userPassword);
 
+  // 合并：id 相同取 updatedAt 新的
   const byId = new Map();
   for (const t of remote) byId.set(t.id, t);
 
@@ -215,87 +255,89 @@ const syncFromRemote = withBusy(async () => {
   }
 
   todos = Array.from(byId.values());
-  await remoteSetTodos(currentUser, siteSecret, todos);
+  await remoteSetTodos(username, siteSecret, userPassword, todos);
 
   render();
-  showAppMsg("同步完成 ✅");
-  setTimeout(() => showAppMsg(""), 900);
+  setAppMsg("同步完成 ✅");
+  setTimeout(() => setAppMsg(""), 900);
 });
 
-// ------------------ login/logout ------------------
-async function loginAs(u, pw) {
-  // ✅ 关键修复：先验证口令是否能从 Worker 拉到数据；成功后才进入 appView
-  const fetchedTodos = await remoteGetTodos(u, pw);
-
-  currentUser = u;
-  siteSecret = pw;
-  todos = fetchedTodos;
-
-  sessionStorage.setItem(sessionUserKey, u);
-  if (rememberPw && rememberPw.checked) {
-    localStorage.setItem(savedPwKey(u), pw);
-  } else {
-    localStorage.removeItem(savedPwKey(u));
-  }
+// ---------- auth flow ----------
+async function enterApp(u, site, pw, fetchedTodos) {
+  username = u;
+  siteSecret = site;
+  userPassword = pw;
+  todos = fetchedTodos || [];
 
   helloTitle.textContent = `Hi, ${u}`;
+  sessionStorage.setItem(kSess, "1");
+
+  // remember options
+  if (rememberUser.checked) localStorage.setItem(kUser, u);
+  else localStorage.removeItem(kUser);
+
+  if (rememberSite.checked) localStorage.setItem(kSite, site);
+  else localStorage.removeItem(kSite);
+
+  if (rememberPw.checked) localStorage.setItem(kPw, pw);
+  else localStorage.removeItem(kPw);
+
   setView(true);
   render();
 }
 
-loginBtn.addEventListener("click", withBusy(async () => {
+const handleAuth = withBusy(async () => {
   try {
     const u = (usernameInput.value || "").trim();
-    const pw = (passwordInput.value || "").trim();
-    if (!u || !pw) { showLoginMsg("请输入用户名和站点口令。"); return; }
+    const site = (siteSecretInput.value || "").trim();
+    const pw = (userPwInput.value || "").trim();
+    const pw2 = (userPw2Input.value || "").trim();
 
-    showLoginMsg("登录中…");
-    await loginAs(u, pw);
+    if (!u || !site || !pw) { setAuthMsg("请填写：用户名 / 站点口令 / 用户密码。"); return; }
+    if (!validUsername(u)) { setAuthMsg("用户名只能包含字母数字 _ -，长度 1~32。"); return; }
 
-    showLoginMsg("");
-    passwordInput.value = "";
+    if (mode === "register") {
+      if (!pw2) { setAuthMsg("请确认用户密码。"); return; }
+      if (pw !== pw2) { setAuthMsg("两次输入的用户密码不一致。"); return; }
+
+      setAuthMsg("注册中…");
+      await doRegister(u, site, pw);
+
+      // 注册成功后直接登录并进入
+      setAuthMsg("注册成功，登录中…");
+      const data = await doLogin(u, site, pw);
+      await enterApp(u, site, pw, data.todos || []);
+      setAuthMsg("");
+      userPw2Input.value = "";
+      return;
+    }
+
+    // login
+    setAuthMsg("登录中…");
+    const data = await doLogin(u, site, pw);
+    await enterApp(u, site, pw, data.todos || []);
+    setAuthMsg("");
   } catch (e) {
-    // ✅ 关键修复：失败时确保回到登录界面
     setView(false);
-    showLoginMsg(String(e.message || e));
+    setAuthMsg(String(e.message || e));
   }
-}));
+});
+
+authBtn.addEventListener("click", handleAuth);
+
+toLoginBtn.addEventListener("click", () => setMode("login"));
+toRegisterBtn.addEventListener("click", () => setMode("register"));
 
 logoutBtn.addEventListener("click", () => {
-  sessionStorage.removeItem(sessionUserKey);
-  currentUser = null;
-  siteSecret = null;
-  todos = [];
+  sessionStorage.removeItem(kSess);
+  username = null; siteSecret = null; userPassword = null; todos = [];
   setView(false);
+  setAuthMsg("");
 });
 
 syncBtn.addEventListener("click", syncFromRemote);
 
-// 自动登录（同浏览器）
-(async function tryAutoLogin() {
-  setView(false);
-  const u = sessionStorage.getItem(sessionUserKey);
-  if (!u) return;
-
-  const saved = localStorage.getItem(savedPwKey(u));
-  if (!saved) return;
-
-  usernameInput.value = u;
-  if (rememberPw) rememberPw.checked = true;
-
-  try {
-    showLoginMsg("恢复会话…");
-    await loginAs(u, saved);
-    showLoginMsg("");
-  } catch (e) {
-    localStorage.removeItem(savedPwKey(u));
-    sessionStorage.removeItem(sessionUserKey);
-    showLoginMsg("自动登录失败：口令可能不对或后端出错。");
-    setView(false);
-  }
-})();
-
-// ------------------ CRUD: add ------------------
+// ---------- CRUD add ----------
 const addTodo = withBusy(async () => {
   const text = (newTodoInput.value || "").trim();
   const ddl = (newDeadlineInput.value || "").trim();
@@ -320,3 +362,20 @@ addBtn.addEventListener("click", addTodo);
 newTodoInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") addTodo();
 });
+
+// ---------- init ----------
+(function init() {
+  setMode("login");
+  setView(false);
+
+  // load remembered fields
+  const savedUser = localStorage.getItem(kUser);
+  const savedSite = localStorage.getItem(kSite);
+  const savedPw = localStorage.getItem(kPw);
+
+  if (savedUser) { usernameInput.value = savedUser; rememberUser.checked = true; }
+  if (savedSite) { siteSecretInput.value = savedSite; rememberSite.checked = true; }
+  if (savedPw) { userPwInput.value = savedPw; rememberPw.checked = true; }
+
+  // 你也可以在这里做自动登录，但通常不建议（安全）
+})();
