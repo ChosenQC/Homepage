@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 final class ScaleStore {
     static final String SITE="https://chosenqc.github.io/Homepage/";
+    static final String SITE_API="https://floral-flower-7c16.chen-qiu.workers.dev";
     static final String API="https://floral-flower-7c16.chen-qiu.workers.dev/api/health/ingest";
     private static final ExecutorService NETWORK=Executors.newSingleThreadExecutor();
     private static final AtomicBoolean SENDING=new AtomicBoolean(false);
@@ -33,6 +34,7 @@ final class ScaleStore {
     private static JSONArray queue(Context c) { try { return new JSONArray(prefs(c).getString("queue","[]")); }catch(Exception e){return new JSONArray();} }
     static synchronized int queueCount(Context c) { return queue(c).length(); }
     static synchronized boolean enqueue(Context c,String key,JSONObject measurement) {
+        rememberTime(c,key,measurement);
         JSONArray q=queue(c);String id=measurement.optString("id");
         try {
             JSONObject item=new JSONObject().put("key",key).put("measurement",measurement);
@@ -42,6 +44,14 @@ final class ScaleStore {
         } catch(Exception e) {status(c,"本地暂存失败，请检查剩余空间");return false;}
     }
     private static synchronized JSONObject first(Context c) { JSONArray q=queue(c);return q.optJSONObject(0); }
+    private static void rememberTime(Context c,String key,JSONObject measurement){
+        try{JSONArray old=new JSONArray(prefs(c).getString("measurementTimes","[]")),next=new JSONArray();for(int i=Math.max(0,old.length()-119);i<old.length();i++){JSONObject entry=old.getJSONObject(i);if(!entry.optString("id").equals(measurement.optString("id")))next.put(entry);}next.put(new JSONObject().put("id",measurement.getString("id")).put("key",key).put("measuredAt",measurement.getString("measuredAt")));prefs(c).edit().putString("measurementTimes",next.toString()).commit();}catch(Exception ignored){}
+    }
+    static synchronized boolean hasMorning(Context c,String key,String day,String zone){
+        try{JSONArray times=new JSONArray(prefs(c).getString("measurementTimes","[]"));JSONArray pending=queue(c);for(int i=0;i<pending.length();i++){JSONObject item=pending.getJSONObject(i);times.put(new JSONObject().put("key",item.getString("key")).put("measuredAt",item.getJSONObject("measurement").getString("measuredAt")));}
+            for(int i=0;i<times.length();i++){JSONObject item=times.getJSONObject(i);if(!key.equals(item.optString("key")))continue;java.time.Instant instant=java.time.Instant.parse(item.getString("measuredAt"));if(MorningWindow.includes(instant,zone)&&MorningWindow.day(instant,zone).equals(day))return true;}
+        }catch(Exception ignored){}return false;
+    }
     private static synchronized void acknowledge(Context c,JSONObject sent) {
         JSONArray q=queue(c),next=new JSONArray();
         for(int i=0;i<q.length();i++) {JSONObject item=q.optJSONObject(i);if(item!=null && !item.toString().equals(sent.toString()))next.put(item);}

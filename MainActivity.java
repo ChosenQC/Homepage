@@ -22,7 +22,7 @@ public final class MainActivity extends Activity {
         TextView title=new TextView(this);title.setText("Daybook");title.setTextSize(17);title.setTextColor(Color.rgb(48,65,45));title.setGravity(Gravity.CENTER_VERTICAL);bar.addView(title,new LinearLayout.LayoutParams(0,dp(44),1));
         TextView settings=new TextView(this);settings.setText("设置");settings.setTextSize(13);settings.setTextColor(Color.rgb(91,119,74));settings.setGravity(Gravity.CENTER);settings.setPadding(dp(16),dp(12),dp(16),dp(12));bar.addView(settings);settings.setOnClickListener(v->showSettings());root.addView(bar);
         web=new WebView(this);root.addView(web,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
-        WebSettings ws=web.getSettings();ws.setJavaScriptEnabled(true);ws.setDomStorageEnabled(true);ws.setAllowFileAccess(false);ws.setAllowContentAccess(false);ws.setGeolocationEnabled(false);ws.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);ws.setCacheMode(WebSettings.LOAD_NO_CACHE);ws.setUserAgentString(ws.getUserAgentString()+" DaybookAndroid/0.2.0");
+        WebSettings ws=web.getSettings();ws.setJavaScriptEnabled(true);ws.setDomStorageEnabled(true);ws.setAllowFileAccess(false);ws.setAllowContentAccess(false);ws.setGeolocationEnabled(false);ws.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);ws.setCacheMode(WebSettings.LOAD_NO_CACHE);ws.setUserAgentString(ws.getUserAgentString()+" DaybookAndroid/0.3.0");
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
                 Uri uri=request.getUrl();if("daybook".equals(uri.getScheme())){if(request.isForMainFrame()&&trusted(view.getUrl()))handleAction(uri);return true;}
@@ -33,11 +33,11 @@ public final class MainActivity extends Activity {
             @Override public void doUpdateVisitedHistory(WebView view,String url,boolean reload){captureBook(url);}
         });
         web.setDownloadListener((url,ua,disposition,mime,length)->{if(trusted(url))try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(Exception ignored){}});
-        web.loadUrl(ScaleStore.SITE+"?app=0.2.0#calendar="+ScaleStore.ensureKey(this));
+        web.loadUrl(ScaleStore.SITE+"?app=0.3.0#calendar="+ScaleStore.ensureKey(this)+(getIntent().getBooleanExtra("openHealth",false)?"&tab=health":""));
     }
     private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
     private boolean trusted(String value){if(value==null)return false;Uri u=Uri.parse(value);return "https".equals(u.getScheme())&&"chosenqc.github.io".equals(u.getHost())&&u.getPath()!=null&&u.getPath().startsWith("/Homepage/");}
-    private void captureBook(String url){String key=ScaleStore.keyFromLink(url);if(key!=null&&!key.equals(ScaleStore.ensureKey(this))){stopCollection();ScaleStore.prefs(this).edit().putString("key",key).apply();Toast.makeText(this,"已切换 Book，请重新开启采集",Toast.LENGTH_LONG).show();}}
+    private void captureBook(String url){String key=ScaleStore.keyFromLink(url);if(key!=null&&!key.equals(ScaleStore.ensureKey(this))){stopCollection();ScaleStore.prefs(this).edit().putString("key",key).apply();NoonReminder.schedule(this);Toast.makeText(this,"已切换 Book，请重新开启采集",Toast.LENGTH_LONG).show();}}
     private void showSettings(){if(!trusted(web.getUrl()))return;web.evaluateJavascript("Boolean(window.daybookSettingsReady)",value->{if("true".equals(value)){web.evaluateJavascript("window.dispatchEvent(new Event('daybook-settings'))",null);sendState();}else Toast.makeText(this,"设置正在加载，请联网后重试",Toast.LENGTH_LONG).show();});}
     private void handleAction(Uri uri){
         String action=uri.getHost();if("settings".equals(action)){showSettings();return;}
@@ -47,9 +47,25 @@ public final class MainActivity extends Activity {
             if(!android.bluetooth.BluetoothAdapter.checkBluetoothAddress(mac)){Toast.makeText(this,"请先踩亮自己的秤，或填写有效地址",Toast.LENGTH_LONG).show();return;}
             new AlertDialog.Builder(this).setTitle("绑定这台体脂秤？").setMessage(mac+"\n确认它是你的秤。绑定后，测量将保存到当前 Book。").setNegativeButton("取消",null).setPositiveButton("确认绑定",(d,w)->{stopCollection();ScaleStore.prefs(this).edit().putString("mac",mac).apply();startCollection();sendState();}).show();
         }
+        else if("health-config".equals(action))saveHealthZone(uri.getQueryParameter("timeZone"));
+        else if("reminder".equals(action)){saveHealthZone(uri.getQueryParameter("timeZone"));boolean enabled="true".equals(uri.getQueryParameter("enabled"));ScaleStore.prefs(this).edit().putBoolean("noonEnabled",enabled).putString("noonError","").apply();if(enabled)requestNoonPermissions();else NoonReminder.schedule(this);}
+        else if("reminder-permission".equals(action)){saveHealthZone(uri.getQueryParameter("timeZone"));requestNoonPermissions();}
+        else if("reminder-test".equals(action)){if(!NoonReminder.notify(this,"称重提醒已就绪","这是测试通知。正式提醒会在中午检查当天晨间称重记录。",ScaleStore.ensureKey(this)))requestNoonPermissions();}
         else if("retry".equals(action))ScaleStore.flush(this);
         else if("refresh".equals(action)){web.clearCache(false);web.reload();return;}
         else if("update".equals(action))updater.check();sendState();
+    }
+    private void saveHealthZone(String zone){
+        try{java.time.ZoneId.of(zone);if(!zone.equals(NoonReminder.zone(this))){ScaleStore.prefs(this).edit().putString("healthZone",zone).apply();NoonReminder.schedule(this);}}catch(Exception e){ScaleStore.prefs(this).edit().putString("noonError","设备不支持此时区，请选择 Asia/Riyadh 或 Asia/Shanghai").apply();}
+    }
+    private void requestNoonPermissions(){
+        if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},21);return;}
+        if(!NoonReminder.notificationsAllowed(this)){
+            new AlertDialog.Builder(this).setTitle("允许称重提醒通知").setMessage("请在系统设置中允许 Daybook 的通知和午间称重提醒频道。").setNegativeButton("稍后",null).setPositiveButton("打开设置",(d,w)->startActivity(new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName()))).show();return;
+        }
+        if(!getSystemService(AlarmManager.class).canScheduleExactAlarms()){
+            new AlertDialog.Builder(this).setTitle("允许准点提醒").setMessage("允许“闹钟和提醒”后，可在每天12:00检查晨间称重。未允许时，系统可能延后提醒。").setNegativeButton("稍后",(d,w)->{NoonReminder.schedule(this);sendState();}).setPositiveButton("允许准点提醒",(d,w)->{try{startActivity(new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName())));}catch(Exception e){Toast.makeText(this,"请在系统设置中允许闹钟和提醒",Toast.LENGTH_LONG).show();}}).show();
+        }else{NoonReminder.schedule(this);sendState();}
     }
     private void stopCollection(){ScaleStore.prefs(this).edit().putBoolean("enabled",false).apply();stopService(new Intent(this,ScaleService.class));}
     private void startCollection(){
@@ -58,12 +74,13 @@ public final class MainActivity extends Activity {
         if(!missing.isEmpty()){requestPermissions(missing.toArray(new String[0]),20);return;}
         ScaleStore.prefs(this).edit().putBoolean("enabled",true).apply();try{startForegroundService(new Intent(this,ScaleService.class));}catch(Exception e){ScaleStore.prefs(this).edit().putBoolean("enabled",false).apply();ScaleStore.status(this,"请保持应用打开后重新开启采集");}
     }
-    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==20){if(checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED){ScaleStore.prefs(this).edit().putBoolean("enabled",true).apply();try{startForegroundService(new Intent(this,ScaleService.class));}catch(Exception e){ScaleStore.status(this,"后台服务未启动，请重试");}}else ScaleStore.status(this,"需要附近设备权限才能读取秤");sendState();}}
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==21){if(Build.VERSION.SDK_INT<33||checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED)requestNoonPermissions();else ScaleStore.prefs(this).edit().putBoolean("noonEnabled",false).putString("noonError","通知权限未允许，请在系统设置开启").apply();sendState();return;}if(request==20){if(checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED){ScaleStore.prefs(this).edit().putBoolean("enabled",true).apply();try{startForegroundService(new Intent(this,ScaleService.class));}catch(Exception e){ScaleStore.status(this,"后台服务未启动，请重试");}}else ScaleStore.status(this,"需要附近设备权限才能读取秤");sendState();}}
     void sendState(){
         if(web==null||!trusted(web.getUrl()))return;
-        try{android.content.SharedPreferences p=ScaleStore.prefs(this);JSONObject data=new JSONObject().put("enabled",p.getBoolean("enabled",false)).put("mac",p.getString("mac","")).put("candidate",p.getString("candidate","")).put("status",p.getString("status","尚未开启采集")).put("queue",ScaleStore.queueCount(this)).put("version",getPackageManager().getPackageInfo(getPackageName(),0).versionName).put("updateStatus",p.getString("updateStatus",""));web.evaluateJavascript("window.dispatchEvent(new CustomEvent('daybook-native-state',{detail:"+data+"}))",null);}catch(Exception ignored){}
+        try{android.content.SharedPreferences p=ScaleStore.prefs(this);JSONObject data=new JSONObject().put("enabled",p.getBoolean("enabled",false)).put("mac",p.getString("mac","")).put("candidate",p.getString("candidate","")).put("status",p.getString("status","尚未开启采集")).put("queue",ScaleStore.queueCount(this)).put("version",getPackageManager().getPackageInfo(getPackageName(),0).versionName).put("updateStatus",p.getString("updateStatus","")).put("reminderSupported",true).put("noonEnabled",p.getBoolean("noonEnabled",false)).put("noonStatus",NoonReminder.status(this));web.evaluateJavascript("window.dispatchEvent(new CustomEvent('daybook-native-state',{detail:"+data+"}))",null);}catch(Exception ignored){}
     }
-    @Override public void onResume(){super.onResume();ScaleStore.flush(this);if(updater!=null)updater.resumeInstall();if(ScaleStore.prefs(this).getBoolean("enabled",false)&&checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED)try{startForegroundService(new Intent(this,ScaleService.class));}catch(Exception ignored){}sendState();}
-    @Override public void onBackPressed(){web.evaluateJavascript("Boolean(document.getElementById('healthSettings')?.open)",value->{if("true".equals(value))web.evaluateJavascript("document.getElementById('healthSettings').close()",null);else if(web.canGoBack())web.goBack();else finish();});}
+    @Override public void onResume(){super.onResume();ScaleStore.flush(this);NoonReminder.schedule(this);if(updater!=null)updater.resumeInstall();if(ScaleStore.prefs(this).getBoolean("enabled",false)&&checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED)try{startForegroundService(new Intent(this,ScaleService.class));}catch(Exception ignored){}sendState();}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(intent.getBooleanExtra("openHealth",false)&&web!=null)web.evaluateJavascript("window.dispatchEvent(new CustomEvent('daybook-navigate',{detail:'health'}))",null);}
+    @Override public void onBackPressed(){web.evaluateJavascript("(()=>{const d=document.querySelector('dialog[open]');if(d){d.close();return true;}const m=document.getElementById('modalOverlay');if(m&&!m.classList.contains('hidden')){document.getElementById('modalCloseBtn').click();return true;}return false;})()",value->{if(!"true".equals(value)){if(web.canGoBack())web.goBack();else finish();}});}
     @Override public void onDestroy(){if(web!=null)web.destroy();super.onDestroy();}
 }
