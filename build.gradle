@@ -2,8 +2,18 @@ plugins { id 'com.android.application' version '8.9.2' }
 android {
     namespace 'com.daybook.scalebridge'
     compileSdk 35
-    defaultConfig { applicationId 'com.daybook.scalebridge'; minSdk 31; targetSdk 35; versionCode 1; versionName '0.1.0' }
-    sourceSets { main { manifest.srcFile 'AndroidManifest.xml'; java.srcDirs = ['.']; java.includes = ['MainActivity.java','ScaleService.java','ScalePacket.java','ScaleStore.java'] } }
+    defaultConfig { applicationId 'com.daybook.faq'; minSdk 31; targetSdk 35; versionCode 2; versionName '0.2.0' }
+    sourceSets { main { manifest.srcFile 'AndroidManifest.xml'; res.srcDirs=['build/generated/daybook-res']; java.srcDirs = ['.']; java.includes = ['MainActivity.java','ScaleService.java','ScalePacket.java','ScaleStore.java','AppUpdater.java','UpdateProvider.java'] } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes { debug { debuggable true }; release { minifyEnabled false } }
 }
+tasks.register('prepareDaybookResources') {
+    inputs.files('faq_mark.xml','faq_launcher.xml','faq_theme.xml','faq_colors.xml')
+    outputs.dir(layout.buildDirectory.dir('generated/daybook-res'))
+    doLast {
+        copy { from 'faq_mark.xml'; into layout.buildDirectory.dir('generated/daybook-res/drawable') }
+        copy { from 'faq_launcher.xml'; into layout.buildDirectory.dir('generated/daybook-res/mipmap-anydpi-v26'); rename { 'ic_launcher.xml' } }
+        copy { from 'faq_theme.xml','faq_colors.xml'; into layout.buildDirectory.dir('generated/daybook-res/values') }
+    }
+}
+tasks.named('preBuild').configure { dependsOn 'prepareDaybookResources' }

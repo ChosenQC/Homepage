@@ -81,8 +81,8 @@ public final class ScaleService extends Service {
         }
         lastSeen=now;weight=packet.weightKg;
         if(packet.impedanceOhm!=null)impedance=packet.impedanceOhm;
-        handler.removeCallbacks(save);
-        if(impedance!=null)saveSession();else handler.postDelayed(save,8000);
+        if(impedance!=null){handler.removeCallbacks(save);saveSession();}
+        else if(!handler.hasCallbacks(save))handler.postDelayed(save,8000);
     }
     private void saveSession(){
         if(sessionId==null)return;
