@@ -5,7 +5,7 @@
   <title>日程 · Daybook</title><link rel="stylesheet" href="./style.css?v=20261027-suite-2"/>
   <script>if(location.protocol === "file:") location.replace("https://chosenqc.github.io/Homepage/" + location.hash);</script>
   <link rel="stylesheet" href="./suite.css?v=20261027-suite-2"/>
-<link rel="stylesheet" href="./apple-health.css?v=20261028-apple-2"/>
+<link rel="stylesheet" href="./apple-health.css?v=20261028-shortcut-1"/>
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -73,11 +73,11 @@
       <section class="settings-card"><div class="settings-card-title"><span class="settings-symbol">↻</span><div><h3>更新</h3><p id="nativeAppVersion">Daybook 网页版</p></div></div><div class="settings-update-row"><div><strong>内部更新</strong><p>日程、图表和算法，刷新即可加载新版。</p></div><button id="refreshDaybook" type="button" class="secondary-button">刷新功能</button></div><div id="nativeAppUpdateRow" class="settings-update-row hidden"><div><strong>应用外壳</strong><p>蓝牙与系统能力更新需要安装确认。</p></div><button id="checkAppUpdate" type="button" class="secondary-button">检查版本</button></div><p id="nativeUpdateStatus" class="settings-feedback" role="status"></p><p id="downloadFaq" class="settings-footnote"><a href="./faq.apk">下载 F@Q 安卓版</a></p></section>
     </div>
   </dialog>
-<dialog id="appleSyncDialog" class="apple-sync-dialog" aria-labelledby="appleSyncTitle"><header class="apple-sync-header"><h2 id="appleSyncTitle">连接苹果健康</h2><button id="closeAppleSync" type="button" aria-label="关闭苹果健康连接">×</button></header><p>在 iPhone「快捷指令」中配置一次，读取活动热量与睡眠，上传到当前 Book。无需安装 iOS 版 Daybook。</p><label for="appleUploadURL">上传地址</label><div class="apple-copy-row"><input id="appleUploadURL" readonly><button id="copyAppleURL" type="button">复制地址</button></div><label for="appleUploadToken">专属连接码</label><div class="apple-copy-row"><input id="appleUploadToken" type="password" readonly autocomplete="off"><button id="copyAppleToken" type="button" disabled>复制连接码</button></div><p id="appleConnectionStatus" class="apple-connection-status" role="status"></p><a class="apple-setup-link" href="./apple-health-setup.html">查看 iPhone 配置步骤 →</a><ol><li>查找最近 3 天的「活动能量」和「睡眠」样本。</li><li>将开始、结束时间、数值和来源整理成 JSON。</li><li>通过「获取 URL 内容」POST 到上面的地址。</li><li>首次解锁手机运行，允许这两类健康数据读取，再刷新此页确认。</li></ol><details><summary>接口字段与连接管理</summary><p>连接码只用于上传这两类健康记录，不能读取或修改日程、笔记。重新生成后，旧连接码失效，历史数据保留。</p><pre>{"token":"连接码","energy":[{"start":"ISO 8601 开始时间","end":"ISO 8601 结束时间","value":12.5,"unit":"kcal","source":"Apple Watch"}],"sleep":[{"start":"ISO 8601 开始时间","end":"ISO 8601 结束时间","value":"核心睡眠","source":"Apple Watch"}]}</pre><button id="rotateAppleToken" type="button">重新生成连接码</button></details></dialog>
+<dialog id="appleSyncDialog" class="apple-sync-dialog" aria-labelledby="appleSyncTitle"><header class="apple-sync-header"><h2 id="appleSyncTitle">连接苹果健康</h2><button id="closeAppleSync" type="button" aria-label="关闭苹果健康连接">×</button></header><p>快捷指令已经配好，只需填一次连接码。</p><label for="appleUploadToken">专属连接码</label><div class="apple-copy-row"><input id="appleUploadToken" type="password" readonly autocomplete="off"><button id="copyAppleToken" type="button" disabled>复制连接码</button></div><p id="appleConnectionStatus" class="apple-connection-status" role="status"></p><a class="apple-setup-link apple-shortcut-download" href="./Daybook-Health-Sync.shortcut?v=1" download="Daybook-Health-Sync.shortcut">下载健康同步快捷指令 <span aria-hidden="true">↓</span></a><ol><li>复制连接码，用 iPhone Safari 下载快捷指令。</li><li>打开下载的文件，添加时粘贴连接码。</li><li>首次解锁运行，允许读取热量、睡眠及访问上传地址。</li></ol><a class="apple-import-help" href="./apple-health-setup.html">查看导入说明与自动同步设置 →</a><details><summary>连接管理</summary><p>连接码只用于上传热量与睡眠。重新生成后，旧连接码失效，历史记录保留。</p><button id="rotateAppleToken" type="button">重新生成连接码</button><label for="appleUploadURL">上传地址（快捷指令已内置）</label><div class="apple-copy-row"><input id="appleUploadURL" readonly><button id="copyAppleURL" type="button">复制地址</button></div></details></dialog>
   <script type="module" src="./app.js?v=20261027-suite-2"></script>
   <script type="module" src="./suite.mjs?v=20261027-suite-2"></script>
   <script type="module" src="./insight.mjs?v=20261027-suite-2"></script>
   <script type="module" src="./health.mjs?v=20261027-suite-2"></script>
-<script type="module" src="./apple-health.mjs?v=20261028-apple-2"></script>
+<script type="module" src="./apple-health.mjs?v=20261028-shortcut-1"></script>
 </body>
 </html>

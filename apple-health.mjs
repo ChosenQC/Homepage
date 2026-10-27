@@ -23,13 +23,13 @@ async function refresh(){if(loading||document.visibilityState!=='visible')return
 $('appleHealthDay').value=localDay(Date.now(),zone);$('appleHealthDay').onchange=draw;
 function showConnection(){
   $('appleUploadURL').value=connection?.endpoint||API+'ingest';$('appleUploadToken').value=connection?.token||'';
-  $('appleConnectionStatus').textContent=connection?'把连接码填到快捷指令的 token 字段。':'在 iPhone 上按下面步骤配置一次。';$('copyAppleToken').disabled=!connection;$('appleSyncDialog').showModal();
+  $('appleConnectionStatus').textContent=connection?'复制后，在导入快捷指令时粘贴连接码。':'用 iPhone 导入快捷指令即可连接。';$('copyAppleToken').disabled=!connection;$('appleSyncDialog').showModal();
 }
 $('connectAppleHealth').onclick=async()=>{showConnection();if(connection||connecting)return;connecting=true;$('appleConnectionStatus').textContent='正在生成连接码…';try{connection=await api('connect');showConnection();}catch(error){$('appleConnectionStatus').textContent=error.message;}finally{connecting=false;}};
 $('closeAppleSync').onclick=()=>$('appleSyncDialog').close();
 async function copy(value,message){try{await navigator.clipboard.writeText(value);$('appleConnectionStatus').textContent=message;}catch{$('appleConnectionStatus').textContent='请长按输入框，选择并复制。';}}
 $('copyAppleToken').onclick=()=>copy(connection.token,'连接码已复制');$('copyAppleURL').onclick=()=>copy($('appleUploadURL').value,'上传地址已复制');
-$('rotateAppleToken').onclick=async()=>{const b=$('rotateAppleToken');b.disabled=true;try{connection=await api('rotate');showConnection();$('appleConnectionStatus').textContent='新连接码已生成，旧快捷指令需替换 token；历史数据保留。';}catch(error){$('appleConnectionStatus').textContent=error.message;}finally{b.disabled=false;}};
+$('rotateAppleToken').onclick=async()=>{const b=$('rotateAppleToken');b.disabled=true;try{connection=await api('rotate');showConnection();$('appleConnectionStatus').textContent='新连接码已生成，旧快捷指令需替换连接码；历史数据保留。';}catch(error){$('appleConnectionStatus').textContent=error.message;}finally{b.disabled=false;}};
 $('appleRefresh').onclick=refresh;
 window.addEventListener('daybook-tab',e=>{active=e.detail==='health';if(active)refresh();});window.addEventListener('daybook-sync',e=>{if(e.detail==='health')refresh();});
 window.addEventListener('daybook-health-zone',e=>{zone=e.detail||deviceTimeZone();draw();});window.addEventListener('focus',()=>{if(active)refresh();});document.addEventListener('visibilitychange',()=>{if(active)refresh();});setInterval(()=>{if(active)refresh();},60000);
