@@ -1,4 +1,5 @@
-export const DEFAULT_HEALTH_ZONE='Asia/Riyadh';
+export function deviceTimeZone(){try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';}catch{return 'UTC';}}
+export const DEFAULT_HEALTH_ZONE=deviceTimeZone();
 const formatters=new Map();
 export function validTimeZone(zone){try{new Intl.DateTimeFormat('en',{timeZone:zone}).format();return typeof zone==='string';}catch{return false;}}
 export function zonedParts(value,zone=DEFAULT_HEALTH_ZONE){

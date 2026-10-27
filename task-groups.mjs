@@ -1,5 +1,5 @@
-import {expandTasks} from './recurrence.mjs?v=20261027-suite-1';
-import {weekDays,zonedParts} from './health-daily.mjs?v=20261027-suite-1';
+import {expandTasks} from './recurrence.mjs?v=20261027-suite-2';
+import {weekDays,zonedParts} from './health-daily.mjs?v=20261027-suite-2';
 export const DEFAULT_GROUPS=[{id:'exercise',name:'锻炼',exercise:true,activities:['练腿','练胸','练背','游泳']}];
 export function normalizeGroups(groups){
   if(!Array.isArray(groups))return structuredClone(DEFAULT_GROUPS);

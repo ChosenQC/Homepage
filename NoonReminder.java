@@ -12,7 +12,7 @@ import java.util.concurrent.Executors;
 import org.json.*;
 public final class NoonReminder extends BroadcastReceiver {
     static final String ACTION="com.daybook.faq.NOON_CHECK";
-    static String zone(Context c){return ScaleStore.prefs(c).getString("healthZone","Asia/Riyadh");}
+    static String zone(Context c){return MorningWindow.deviceZone();}
     static boolean notificationsAllowed(Context c){NotificationManager manager=c.getSystemService(NotificationManager.class);NotificationChannel channel=manager.getNotificationChannel("morning-weight");return (Build.VERSION.SDK_INT<33||c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED)&&manager.areNotificationsEnabled()&&(channel==null||channel.getImportance()!=NotificationManager.IMPORTANCE_NONE);}
     static String status(Context c){
         if(!ScaleStore.prefs(c).getBoolean("noonEnabled",false))return ScaleStore.prefs(c).getString("noonError","未开启");

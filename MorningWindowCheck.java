@@ -3,6 +3,8 @@ import java.time.*;
 public final class MorningWindowCheck {
  static void check(boolean ok,String message){if(!ok)throw new AssertionError(message);}
  public static void main(String[] args){
+  java.util.TimeZone original=java.util.TimeZone.getDefault();
+  try{java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Riyadh"));check(MorningWindow.deviceZone().equals("Asia/Riyadh"),"phone Riyadh time");java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Shanghai"));check(MorningWindow.deviceZone().equals("Asia/Shanghai"),"follow changed phone timezone");}finally{java.util.TimeZone.setDefault(original);}
   String zone="Asia/Riyadh";
   check(!MorningWindow.includes(Instant.parse("2026-10-27T02:00:00Z"),zone),"05:00 excluded");
   check(MorningWindow.includes(Instant.parse("2026-10-27T02:00:00.001Z"),zone),"after 05:00 included");

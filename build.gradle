@@ -2,7 +2,7 @@ plugins { id 'com.android.application' version '8.9.2' }
 android {
     namespace 'com.daybook.scalebridge'
     compileSdk 35
-    defaultConfig { applicationId 'com.daybook.faq'; minSdk 31; targetSdk 35; versionCode 3; versionName '0.3.0' }
+    defaultConfig { applicationId 'com.daybook.faq'; minSdk 31; targetSdk 35; versionCode 4; versionName '0.3.1' }
     sourceSets { main { manifest.srcFile 'AndroidManifest.xml'; res.srcDirs=['build/generated/daybook-res']; java.srcDirs = ['.']; java.includes = ['MainActivity.java','ScaleService.java','ScalePacket.java','ScaleStore.java','AppUpdater.java','UpdateProvider.java','MorningWindow.java','NoonReminder.java'] } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes { debug { debuggable true }; release { minifyEnabled false } }

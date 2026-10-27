@@ -1,6 +1,6 @@
-import { expandTasks, repeatLabel, occurrenceFor } from './recurrence.mjs?v=20261027-suite-1';
-import {normalizeGroups,groupForTask} from './task-groups.mjs?v=20261027-suite-1';
-import {publishCalendar} from './suite-state.mjs?v=20261027-suite-1';
+import { expandTasks, repeatLabel, occurrenceFor } from './recurrence.mjs?v=20261027-suite-2';
+import {normalizeGroups,groupForTask} from './task-groups.mjs?v=20261027-suite-2';
+import {publishCalendar} from './suite-state.mjs?v=20261027-suite-2';
 // Calendar config
 const WEEK_START = 0;        // 0=Sunday
 

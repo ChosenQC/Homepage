@@ -1,6 +1,6 @@
-import {subscribeCalendar,calendarSnapshot} from './suite-state.mjs?v=20261027-suite-1';
-import {weeklyExercise} from './task-groups.mjs?v=20261027-suite-1';
-import {DEFAULT_HEALTH_ZONE,zonedParts} from './health-daily.mjs?v=20261027-suite-1';
+import {subscribeCalendar,calendarSnapshot} from './suite-state.mjs?v=20261027-suite-2';
+import {weeklyExercise} from './task-groups.mjs?v=20261027-suite-2';
+import {DEFAULT_HEALTH_ZONE,zonedParts} from './health-daily.mjs?v=20261027-suite-2';
 const $=id=>document.getElementById(id),escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let active='daybook',weekOffset=0,zone=DEFAULT_HEALTH_ZONE;
 export function selectPage(page){

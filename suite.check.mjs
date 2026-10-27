@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import {morningDaily,isMorning,weekDays} from './health-daily.mjs';
+import {morningDaily,isMorning,weekDays,deviceTimeZone} from './health-daily.mjs';
 import {weeklyExercise,normalizeGroups,groupForTask} from './task-groups.mjs';
 const r=(id,time,imp=500)=>({id,measuredAt:`2026-10-27T${time}+03:00`,weightKg:70,impedanceOhm:imp});
-assert.equal(isMorning(r('a','05:00:00').measuredAt),false);assert.equal(isMorning(r('a','05:00:00.001').measuredAt),true);assert.equal(isMorning(r('a','12:00:00').measuredAt),false);
-assert.deepEqual(morningDaily([r('late','21:00:00'),r('early','06:00:00'),r('last','11:59:59',null),r('noon','12:00:00')]).map(x=>x.id),['last']);
+assert.equal(isMorning(r('a','05:00:00').measuredAt,'Asia/Riyadh'),false);assert.equal(isMorning(r('a','05:00:00.001').measuredAt,'Asia/Riyadh'),true);assert.equal(isMorning(r('a','12:00:00').measuredAt,'Asia/Riyadh'),false);
+assert.deepEqual(morningDaily([r('late','21:00:00'),r('early','06:00:00'),r('last','11:59:59',null),r('noon','12:00:00')],'Asia/Riyadh').map(x=>x.id),['last']);
+const originalZone=process.env.TZ;try{process.env.TZ='Asia/Shanghai';assert.equal(deviceTimeZone(),'Asia/Shanghai');process.env.TZ='Asia/Riyadh';assert.equal(deviceTimeZone(),'Asia/Riyadh');}finally{if(originalZone===undefined)delete process.env.TZ;else process.env.TZ=originalZone;}
 assert.equal(morningDaily([r('late','21:00:00')],'Asia/Shanghai').length,0);
 assert.deepEqual(weekDays('2026-10-27T10:00:00Z'),['2026-10-25','2026-10-26','2026-10-27','2026-10-28','2026-10-29','2026-10-30','2026-10-31']);
 const groups=normalizeGroups();assert.ok(groups[0].activities.includes('游泳'));groups[0].name='训练';

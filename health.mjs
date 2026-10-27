@@ -1,8 +1,8 @@
 import {METRICS,validProfile} from './body-metrics.mjs?v=20261027-body-2';
-import {morningDaily,DEFAULT_HEALTH_ZONE,validTimeZone} from './health-daily.mjs?v=20261027-suite-1';
+import {morningDaily,DEFAULT_HEALTH_ZONE,validTimeZone,deviceTimeZone} from './health-daily.mjs?v=20261027-suite-2';
 const endpoint = 'https://floral-flower-7c16.chen-qiu.workers.dev/api/health/get';
 let records = [], fetching = false, profile=null, profileRevision=null, profileReady=false, nativeState=null, settingsTimer, formDirty=false, refreshDone=Promise.resolve();
-let preferences={timeZone:DEFAULT_HEALTH_ZONE},preferenceRevision=null,nativeZoneSent=null;
+let preferences={timeZone:DEFAULT_HEALTH_ZONE},nativeZoneSent=null;
 const $ = id => document.getElementById(id);
 function escape(value) { return String(value).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 const dateLabel = value => new Date(value).toLocaleDateString('zh-CN',{timeZone:preferences.timeZone,month:'numeric',day:'numeric'});
@@ -52,7 +52,7 @@ async function refresh(force=false) {
     const result=await response.json();
     if(!response.ok||!result.ok)throw new Error(result.error||'同步失败');
     records=(result.records||[]).filter(r=>Number.isFinite(r.weightKg)&&Number.isFinite(Date.parse(r.measuredAt))).sort((a,b)=>a.measuredAt.localeCompare(b.measuredAt));
-    preferences=result.preferences||{timeZone:DEFAULT_HEALTH_ZONE};preferenceRevision=result.preferenceRevision??null;
+    preferences={timeZone:validTimeZone(nativeState?.timeZone)?nativeState.timeZone:deviceTimeZone()};
     window.dispatchEvent(new CustomEvent('daybook-health-zone',{detail:preferences.timeZone}));
     if(native()&&nativeZoneSent!==preferences.timeZone){nativeZoneSent=preferences.timeZone;nativeAction('health-config',{timeZone:preferences.timeZone});}
     profile=result.profile||null;profileRevision=result.profileRevision??null;profileReady=true;$('saveBodyProfile').disabled=false;
@@ -68,7 +68,7 @@ function fillProfile(){
   formDirty=false;
   $('profileHeight').value=profile?.heightCm??'';$('profileAge').value=profile?profile.age+new Date().getUTCFullYear()-profile.year:'';$('profileSex').value=profile?.sex??'';
   $('profileStatus').textContent=profileReady?(profile?'已保存到当前 Book':'填写后即可生成身体成分趋势'):'正在读取云端资料…';
-  if(document.activeElement!==$('healthTimeZone'))$('healthTimeZone').value=preferences.timeZone;
+  $('healthZoneStatus').textContent='跟随设备系统时间 · '+preferences.timeZone;
 }
 function openSettings(){
   fillProfile();$('settingsBook').value=`https://chosenqc.github.io/Homepage/#calendar=${bookKey()}`;
@@ -101,6 +101,8 @@ $('settingsSaveBook').onclick=()=>{
 };
 window.addEventListener('daybook-native-state',event=>{
   nativeState=event.detail;if(!nativeState)return;
+  if(validTimeZone(nativeState.timeZone)&&preferences.timeZone!==nativeState.timeZone){preferences={timeZone:nativeState.timeZone};window.dispatchEvent(new CustomEvent('daybook-health-zone',{detail:preferences.timeZone}));draw();}
+  $('healthZoneStatus').textContent='跟随手机系统时间 · '+preferences.timeZone;
   $('nativeScaleEnabled').checked=!!nativeState.enabled;$('nativeScaleSummary').textContent=nativeState.mac?'已绑定 · '+nativeState.mac:'尚未绑定';
   $('nativeScaleStatus').textContent=nativeState.status||'等待称重';$('nativeQueueCount').textContent=`待上传 ${nativeState.queue||0} 条`;
   $('candidateScaleRow').classList.toggle('hidden',!nativeState.candidate||nativeState.candidate===nativeState.mac);$('candidateScaleText').textContent='发现 '+(nativeState.candidate||'');
@@ -108,9 +110,6 @@ window.addEventListener('daybook-native-state',event=>{
   const reminderSupported=!!nativeState.reminderSupported;$('noonReminderControls').classList.toggle('hidden',!reminderSupported);$('noonReminderUpgrade').classList.toggle('hidden',reminderSupported);
   $('noonReminderEnabled').checked=!!nativeState.noonEnabled;$('noonReminderStatus').textContent=nativeState.noonStatus||'未开启';
 });
-$('healthZoneForm').onsubmit=async e=>{e.preventDefault();const timeZone=$('healthTimeZone').value.trim();if(!validTimeZone(timeZone)){$('healthZoneStatus').textContent='请输入有效时区，例如 Asia/Riyadh';return;}
-  $('saveHealthZone').disabled=true;try{const response=await fetch(endpoint.replace('/get','/preferences'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:bookKey(),preferences:{timeZone},revision:preferenceRevision}),signal:AbortSignal.timeout(20000)});const result=await response.json();if(!response.ok)throw Error(result.error||'保存失败');preferences=result.preferences;preferenceRevision=result.revision;$('healthZoneStatus').textContent='已保存';window.dispatchEvent(new CustomEvent('daybook-health-zone',{detail:timeZone}));nativeAction('health-config',{timeZone});draw();}catch(error){$('healthZoneStatus').textContent=error.message;}finally{$('saveHealthZone').disabled=false;}
-};
 $('noonReminderEnabled').onchange=()=>nativeAction('reminder',{enabled:String($('noonReminderEnabled').checked),timeZone:preferences.timeZone});
 $('noonReminderPermission').onclick=()=>nativeAction('reminder-permission',{timeZone:preferences.timeZone});
 document.getElementById('testNoonReminder').onclick=()=>nativeAction('reminder-test');
