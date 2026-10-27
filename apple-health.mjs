@@ -1,4 +1,4 @@
-import {activityDays,sleepDays,localDay} from './apple-health-data.mjs?v=20261028-apple-1';
+import {activityDays,sleepDays,localDay} from './apple-health-data.mjs?v=20261028-apple-2';
 import {deviceTimeZone} from './health-daily.mjs?v=20261027-suite-2';
 const API='https://floral-flower-7c16.chen-qiu.workers.dev/api/apple/', $=id=>document.getElementById(id);
 let zone=deviceTimeZone(),records=[],meta=null,loading=false,active=false,connection=null,connecting=false;

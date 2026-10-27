@@ -12,14 +12,13 @@ export function sleepStage(value){
 }
 export function energyKcal(value,unit='kcal'){
   if(typeof value==='string'){
-    const m=value.trim().match(/^([0-9]+(?:[.,][0-9]+)?)\s*(kcal|cal|kj|千卡|大卡|卡路里|千焦)?$/i);
-    if(!m)return null;value=Number(m[1].replace(',','.'));if(m[2])unit=m[2];
+    const m=value.trim().match(/^([0-9]+(?:\.[0-9]+)?)\s*(kcal|kj|千卡|大卡|卡路里|千焦|千焦耳)?$/i);
+    if(!m)return null;value=Number(m[1]);if(m[2])unit=m[2];
   }
   if(typeof value!=='number'||!Number.isFinite(value)||value<0)return null;
   const u=String(unit).trim().toLowerCase();
   if(['kcal','千卡','大卡','卡路里'].includes(u))return value;
-  if(['kj','千焦'].includes(u))return value/4.184;
-  if(u==='cal')return value/1000;
+  if(['kj','千焦','千焦耳'].includes(u))return value/4.184;
   return null;
 }
 export const localDay=(value,zone)=>new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
@@ -41,7 +40,7 @@ export function activityDays(records,zone){
   return [...days.entries()].map(([day,raw])=>{const data=pickSource(raw);return {day,kcal:data.reduce((n,r)=>n+r.kcal,0),samples:data.length,source:data[0].source,lastAt:Math.max(...data.map(r=>r.end)),multipleSources:new Set(raw.map(r=>r.source)).size>1};}).sort((a,b)=>a.day.localeCompare(b.day));
 }
 export function sleepDays(records,zone){
-  const raw=unique(records,'sleep').sort((a,b)=>a.start-b.start),sessions=[];
+  const raw=unique(records,'sleep').filter(r=>asleep(r.stage)||r.stage==='awake').sort((a,b)=>a.start-b.start),sessions=[];
   for(const r of raw){const last=sessions.at(-1);if(last&&r.start-last.end<=3*3600000){last.records.push(r);last.end=Math.max(last.end,r.end);}else sessions.push({end:r.end,records:[r]});}
   const days=new Map();for(const session of sessions){
     const selected=pickSource(session.records),sleep=selected.filter(r=>asleep(r.stage));if(!sleep.length)continue;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {energyKcal,sleepStage,activityDays,sleepDays} from './apple-health-data.mjs';
-assert.ok(Math.abs(energyKcal('418.4 kJ')-100)<1e-10);assert.equal(energyKcal('12.5 千卡'),12.5);assert.equal(energyKcal('1,5 kcal'),1.5);assert.equal(energyKcal('1,000.5'),null);assert.equal(energyKcal('bad'),null);assert.equal(energyKcal(-1),null);
+assert.ok(Math.abs(energyKcal('418.4 kJ')-100)<1e-10);assert.equal(energyKcal('12.5 千卡'),12.5);assert.equal(energyKcal('1,5 kcal'),null);assert.equal(energyKcal('1,000.5'),null);assert.equal(energyKcal(100,'cal'),null);assert.equal(energyKcal('bad'),null);assert.equal(energyKcal(-1),null);
 assert.equal(sleepStage(0),'inBed');assert.equal(sleepStage('Asleep (Core)'),'core');assert.equal(sleepStage('深度睡眠'),'deep');assert.equal(sleepStage('快速眼动睡眠'),'rem');assert.equal(sleepStage('new-stage'),'unknown');
 const t=s=>Date.parse(s+'+03:00'),energy=(a,b,kcal,source='Apple Watch')=>({type:'energy',start:t(a),end:t(b),kcal,source});
 const sample=energy('2026-10-27T08:00','2026-10-27T08:05',10);
@@ -12,4 +12,5 @@ const night=[sleep('2026-10-27T22:00','2026-10-28T07:00','inBed'),sleep('2026-10
 const n=sleepDays([...night,...night,sleep('2026-10-27T22:00','2026-10-28T08:00','asleep','iPhone')],'Asia/Riyadh')[0];
 assert.equal(n.day,'2026-10-28');assert.equal(n.minutes,420);assert.equal(n.stages.deep,60);assert.equal(n.stages.core,120);assert.equal(n.stages.rem,60);assert.equal(n.stages.asleep,180);
 assert.equal(sleepDays([night[0]],'Asia/Riyadh').length,0);assert.equal(sleepDays([sleep('2026-10-27T23:00','2026-10-28T00:30','unknown')],'Asia/Riyadh').length,0);
+const separate=sleepDays([sleep('2026-10-26T22:00','2026-10-28T08:00','inBed'),sleep('2026-10-26T23:00','2026-10-27T06:00','core'),sleep('2026-10-27T23:00','2026-10-28T06:00','core')],'Asia/Riyadh');assert.deepEqual(separate.map(s=>[s.day,s.minutes]),[['2026-10-27',420],['2026-10-28',420]]);
 console.log('PASS: units, sleep labels, source preference, duplicate imports, missing versus zero, overnight wake-date and overlapping sleep stages');
