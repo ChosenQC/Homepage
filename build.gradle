@@ -1,0 +1,9 @@
+plugins { id 'com.android.application' version '8.9.2' }
+android {
+    namespace 'com.daybook.scalebridge'
+    compileSdk 35
+    defaultConfig { applicationId 'com.daybook.scalebridge'; minSdk 31; targetSdk 35; versionCode 1; versionName '0.1.0' }
+    sourceSets { main { manifest.srcFile 'AndroidManifest.xml'; java.srcDirs = ['.']; java.includes = ['MainActivity.java','ScaleService.java','ScalePacket.java','ScaleStore.java'] } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    buildTypes { debug { debuggable true }; release { minifyEnabled false } }
+}
