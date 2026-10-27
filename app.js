@@ -1,8 +1,10 @@
+import { expandTasks, repeatLabel } from './recurrence.mjs?v=20261027-repeat-1';
 // Calendar config
 const WEEK_START = 0;        // 0=Sunday
 
 const API_BASE = "https://floral-flower-7c16.chen-qiu.workers.dev";
 const LINK_KEY = "todo_calendar_link_v1";
+const ONLINE_URL = "https://chosenqc.github.io/Homepage/";
 let calendarKey;
 let revision = null;
 let lastSaved = { version: 2, tasks: [], priority: [] };
@@ -43,6 +45,7 @@ let busy = false;
 let store = { version: 2, tasks: [], priority: [] };
 let viewDate = new Date();
 let editingTaskId = null;
+let editingOccurrenceDate = null;
 
 // ---------- helpers ----------
 function setAppMsg(s) {
@@ -237,7 +240,7 @@ async function persist() {
     const result = await sharedApi("set", { todos: store, revision });
     revision = result.revision;
     lastSaved = structuredClone(store);
-    setAppMsg("已保存");
+    setAppMsg("已保存到云端");
   } catch (error) {
     store = structuredClone(lastSaved);
     renderAll();
@@ -253,7 +256,7 @@ async function loadRemote() {
   lastSaved = structuredClone(store);
   loaded = true;
   renderAll();
-  setAppMsg("已同步");
+  setAppMsg(revision ? `已从云端同步 · ${store.tasks.length} 项任务` : "新日历 · 添加任务后自动保存到云端");
 }
 const syncFromRemote = withBusy(loadRemote);
 
@@ -281,8 +284,14 @@ function completionControl(task) {
     const complete = checkbox.checked;
     withBusy(async () => {
       checkbox.disabled = true;
-      task.completed = complete;
-      task.updatedAt = Date.now();
+      const source = store.tasks.find(item => item.id === (task.sourceId || task.id));
+      if (!source) return;
+      if (task.occurrenceDate) {
+        source.completionDates ||= {};
+        if (complete) source.completionDates[task.occurrenceDate] = true;
+        else delete source.completionDates[task.occurrenceDate];
+      } else source.completed = complete;
+      source.updatedAt = Date.now();
       await persist();
       renderAll();
       const sameTask = [...document.querySelectorAll(".completion-control input")].find(input => input.dataset.taskId === task.id);
@@ -308,10 +317,7 @@ function renderCalendar() {
   weekTitle.textContent = `${shortDate(week0)} — ${shortDate(weekEnd)}`;
   document.getElementById("monthTitle").textContent = `${viewDate.getFullYear()} · WEEKLY PLANNER`;
   document.getElementById("monthHeading").textContent = `${viewDate.getMonth() + 1}月`;
-  const weekTasks = store.tasks.filter(t => {
-    const date = new Date(t.type === "scheduled" ? t.startISO : t.deadlineISO);
-    return date >= week0 && date < addDays(week0, 7);
-  });
+  const weekTasks = expandTasks(store.tasks, week0, addDays(week0, 7));
   const completedCount = weekTasks.filter(task => task.completed).length;
   document.getElementById("weekCount").textContent = `${weekTasks.length} 项安排${completedCount ? ` · ${completedCount} 已完成` : ""}`;
   calGrid.replaceChildren();
@@ -343,9 +349,9 @@ function renderCalendar() {
       details.type = "button";
       details.className = "task-details";
       const time = deadline ? `截止 · ${timeLabel(start)}` : `${timeLabel(start)} — ${timeLabel(end)}${toISODate(end) !== toISODate(start) ? ' +' + Math.round((new Date(toISODate(end)) - new Date(toISODate(start))) / 86400000) + '天' : ''}`;
-      details.innerHTML = `<span class="task-time">${deadline ? '<svg aria-hidden="true"><use href="#i-flag"/></svg>' : ''}${escapeHTML(time)}${task.completed ? '<span class="completed-label">已完成</span>' : deadline ? '' : `<span class="task-duration">${durationLabel(task.durationMin || 60)}</span>`}</span><span class="task-name">${escapeHTML(task.title)}</span>`;
+      details.innerHTML = `<span class="task-time">${deadline ? '<svg aria-hidden="true"><use href="#i-flag"/></svg>' : ''}${escapeHTML(time)}${task.completed ? '<span class="completed-label">已完成</span>' : task.recurrence ? '<span class="task-duration">↻ ' + escapeHTML(repeatLabel(task.recurrence)) + '</span>' : deadline ? '' : `<span class="task-duration">${durationLabel(task.durationMin || 60)}</span>`}</span><span class="task-name">${escapeHTML(task.title)}</span>`;
       details.setAttribute("aria-label", `${task.title}，${time}${task.completed ? "，已完成" : ""}，编辑任务`);
-      details.onclick = () => openEditTask(task.id);
+      details.onclick = () => openEditTask(task.sourceId || task.id, task.occurrenceDate);
       card.append(completionControl(task), details);
       content.appendChild(card);
     }
@@ -375,14 +381,14 @@ function renderPriority() {
     if (!t) continue;
 
     const li = document.createElement("li");
-    li.className = `pitem${t.completed ? " is-complete" : ""}`;
+    li.className = `pitem${t.completed && !t.recurrence ? " is-complete" : ""}`;
     li.draggable = true;
     li.dataset.id = id;
 
-    const badge = t.completed ? { text: "已完成", cls: "badge completed-badge" } : (t.type === "deadline") ? deadlineBadge(t.deadlineISO) : { text: "日程", cls: "badge" };
+    const badge = t.recurrence ? { text: "重复", cls: "badge" } : t.completed ? { text: "已完成", cls: "badge completed-badge" } : (t.type === "deadline") ? deadlineBadge(t.deadlineISO) : { text: "日程", cls: "badge" };
     li.innerHTML = `<span class="drag-handle" aria-hidden="true">⠿</span><button type="button" class="priority-task"><span class="pt"><span class="name">${escapeHTML(t.title)}</span><span class="${badge.cls}">${badge.text}</span></span><span class="meta">${escapeHTML(taskMeta(t))}</span></button>`;
     li.querySelector("button").onclick = () => openEditTask(id);
-    li.querySelector(".drag-handle").after(completionControl(t));
+    if (!t.recurrence) li.querySelector(".drag-handle").after(completionControl(t));
     const order = document.createElement("span");
     order.className = "priority-order";
     for (const [step, symbol, label] of [[-1, "↑", "提高优先级"], [1, "↓", "降低优先级"]]) {
@@ -436,12 +442,42 @@ function reorderPriority(fromId, toId) {
 }
 
 function taskMeta(t) {
+  if (t.recurrence) return `${repeatLabel(t.recurrence)} · ${t.recurrence.time}`;
   const date = new Date(t.type === "scheduled" ? t.startISO : t.deadlineISO);
   return `${date.getMonth()+1}月${date.getDate()}日 · ${timeLabel(date)}`;
 }
 function taskTitleForLabel(task) { return task.title || "任务"; }
 
 // ---------- modal ----------
+const repeatFrequency = document.getElementById("repeatFrequency");
+const repeatUntil = document.getElementById("repeatUntil");
+const weekdayInputs = [...document.querySelectorAll("#repeatWeekdays input")];
+function refreshRepeatFields() {
+  const frequency = repeatFrequency.value;
+  document.getElementById("repeatWeekdays").classList.toggle("hidden", frequency !== "weekly");
+  document.getElementById("repeatUntilRow").classList.toggle("hidden", frequency === "none");
+}
+function setRepeatRule(rule = null) {
+  repeatFrequency.value = rule?.frequency || "none";
+  repeatUntil.value = rule?.until || "";
+  for (const input of weekdayInputs) input.checked = !!rule?.weekdays?.includes(Number(input.value));
+  refreshRepeatFields();
+}
+repeatFrequency.onchange = () => {
+  if (repeatFrequency.value === "weekly" && !weekdayInputs.some(input => input.checked)) {
+    const start = fromLocalDTInputValue(taskStartInput.value) || new Date();
+    weekdayInputs[start.getDay()].checked = true;
+  }
+  refreshRepeatFields();
+};
+function readRepeatRule(start) {
+  if (taskIsDeadline.checked || repeatFrequency.value === "none") return null;
+  const weekdays = weekdayInputs.filter(input=>input.checked).map(input=>Number(input.value));
+  if (repeatFrequency.value === "weekly" && !weekdays.length) throw new Error("请选择至少一个重复日期。");
+  const startDate = toISODate(start), until = repeatUntil.value || null;
+  if (until && until < startDate) throw new Error("结束日期不能早于开始日期。");
+  return { frequency: repeatFrequency.value, weekdays, startDate, time: timeLabel(start), until };
+}
 const quickTaskButtons = [...document.querySelectorAll("[data-task-title]")];
 const quickDurationButtons = [...document.querySelectorAll("[data-duration]")];
 function syncQuickChoices() {
@@ -474,17 +510,23 @@ function openModal() {
 function closeModal() {
   modalOverlay.classList.add("hidden");
   editingTaskId = null;
+  editingOccurrenceDate = null;
   document.body.style.overflow = "";
   modalReturnFocus?.focus();
 }
 function applyModalMode(isDeadline) {
   deadlineFields.classList.toggle("hidden", !isDeadline);
   scheduledFields.classList.toggle("hidden", isDeadline);
+  document.getElementById("repeatFields").classList.toggle("hidden", isDeadline);
 }
 
 function openCreateScheduled(startDate) {
   if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
+  editingOccurrenceDate = null;
+  setRepeatRule();
+  document.getElementById("repeatEditNote").classList.add("hidden");
+  document.getElementById("skipOccurrenceBtn").classList.add("hidden");
   modalTitle.textContent = "新建任务";
   modalDeleteBtn.classList.add("hidden");
 
@@ -500,6 +542,10 @@ function openCreateScheduled(startDate) {
 function openCreateDeadline(defaultDay = new Date()) {
   if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
+  editingOccurrenceDate = null;
+  setRepeatRule();
+  document.getElementById("repeatEditNote").classList.add("hidden");
+  document.getElementById("skipOccurrenceBtn").classList.add("hidden");
   modalTitle.textContent = "添加截止事项";
   modalDeleteBtn.classList.add("hidden");
 
@@ -514,12 +560,17 @@ function openCreateDeadline(defaultDay = new Date()) {
   taskDurInput.value = "60";
   openModal();
 }
-function openEditTask(id) {
+function openEditTask(id, occurrenceDate = null) {
   const t = store.tasks.find(x => x.id === id);
   if (!t) return;
 
   editingTaskId = id;
-  modalTitle.textContent = "编辑任务";
+  editingOccurrenceDate = occurrenceDate;
+  setRepeatRule(t.recurrence);
+  document.getElementById("repeatEditNote").classList.toggle("hidden", !t.recurrence);
+  document.getElementById("skipOccurrenceBtn").classList.toggle("hidden", !t.recurrence || !occurrenceDate);
+  modalTitle.textContent = t.recurrence ? "编辑重复任务" : "编辑任务";
+  modalDeleteBtn.textContent = t.recurrence ? "删除整组" : "删除任务";
   modalDeleteBtn.classList.remove("hidden");
 
   taskTitleInput.value = t.title || "";
@@ -528,7 +579,7 @@ function openEditTask(id) {
   applyModalMode(isDeadline);
 
   if (t.type === "scheduled") {
-    taskStartInput.value = toLocalDTInputValue(new Date(t.startISO));
+    taskStartInput.value = t.recurrence ? `${t.recurrence.startDate}T${t.recurrence.time}` : toLocalDTInputValue(new Date(t.startISO));
     taskDurInput.value = String(t.durationMin || 60);
     taskDeadlineInput.value = "";
   } else {
@@ -544,7 +595,7 @@ modalCloseBtn.onclick = closeModal;
 modalOverlay.addEventListener("keydown", event => {
   if (event.key === "Escape") { closeModal(); return; }
   if (event.key !== "Tab") return;
-  const fields = [...modalOverlay.querySelectorAll("button, input")].filter(el => el.getClientRects().length && !el.disabled);
+  const fields = [...modalOverlay.querySelectorAll("button, input, select")].filter(el => el.getClientRects().length && !el.disabled);
   const first = fields[0], last = fields.at(-1);
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
@@ -571,7 +622,7 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
         const dur = parseInt(taskDurInput.value || "60", 10);
         if (!st) { setModalMsg("请选择开始时间。"); return; }
         if (!dur || dur < 15) { setModalMsg("时长至少 15 分钟。"); return; }
-        const t = { id: uid(), type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, updatedAt: now };
+        const t = { id: uid(), type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, recurrence: readRepeatRule(st), completionDates: {}, skippedDates: {}, updatedAt: now };
         store.tasks.push(t);
         insertByTimeDefault(t);
       }
@@ -589,7 +640,8 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
         const dur = parseInt(taskDurInput.value || "60", 10);
         if (!st) { setModalMsg("请选择开始时间。"); return; }
         if (!dur || dur < 15) { setModalMsg("时长至少 15 分钟。"); return; }
-        store.tasks[idx] = { id: old.id, completed: !!old.completed, type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, updatedAt: now };
+        const recurrence = readRepeatRule(st);
+        store.tasks[idx] = { id: old.id, completed: recurrence ? false : !!old.completed, type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, recurrence, completionDates: old.completionDates || {}, skippedDates: old.skippedDates || {}, updatedAt: now };
       }
     }
 
@@ -611,6 +663,16 @@ modalDeleteBtn.addEventListener("click", withBusy(async () => {
   closeModal();
   renderAll();
 }));
+document.getElementById("skipOccurrenceBtn").onclick = withBusy(async () => {
+  const task = store.tasks.find(item=>item.id === editingTaskId);
+  if (!task?.recurrence || !editingOccurrenceDate) return;
+  task.skippedDates ||= {};
+  task.skippedDates[editingOccurrenceDate] = true;
+  task.updatedAt = Date.now();
+  await persist();
+  closeModal();
+  renderAll();
+});
 
 // ---------- navigation ----------
 prevWeekBtn.onclick = () => { viewDate = addDays(viewDate, -7); renderCalendar(); };
@@ -626,13 +688,21 @@ document.getElementById("newTaskBtn").onclick = () => {
 syncBtn.addEventListener("click", syncFromRemote);
 
 document.getElementById("copyLinkBtn").onclick = async () => {
+  if (!calendarKey) { setAppMsg("日历尚未就绪，请稍后重试。"); return; }
+  const link = `${ONLINE_URL}#calendar=${calendarKey}`;
+  document.getElementById("sharePanel").classList.remove("hidden");
+  document.getElementById("shareLinkInput").value = link;
+  document.getElementById("openOnlineLink").href = link;
   try {
-    await navigator.clipboard.writeText(location.href);
-    setAppMsg("链接已复制");
+    await navigator.clipboard.writeText(link);
+    setAppMsg("线上同步链接已复制");
   } catch {
-    setAppMsg("请复制浏览器地址栏中的完整链接（包含 # 后面的内容）。");
+    document.getElementById("shareLinkInput").focus();
+    document.getElementById("shareLinkInput").select();
+    setAppMsg("请复制上方的线上同步链接。");
   }
 };
+document.getElementById("closeShareBtn").onclick = () => document.getElementById("sharePanel").classList.add("hidden");
 
 // ---------- init ----------
 (async function init() {
