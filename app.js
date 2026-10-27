@@ -1,4 +1,6 @@
-import { expandTasks, repeatLabel, occurrenceFor } from './recurrence.mjs?v=20261027-custom-1';
+import { expandTasks, repeatLabel, occurrenceFor } from './recurrence.mjs?v=20261027-suite-1';
+import {normalizeGroups,groupForTask} from './task-groups.mjs?v=20261027-suite-1';
+import {publishCalendar} from './suite-state.mjs?v=20261027-suite-1';
 // Calendar config
 const WEEK_START = 0;        // 0=Sunday
 
@@ -170,6 +172,30 @@ function unwrapTodos(x) {
 }
 
 // ---------- API ----------
+function renderTaskGroups(){
+  const groups=normalizeGroups(store.taskGroups),select=document.getElementById('taskGroupSelect'),current=select.value;
+  select.innerHTML='<option value="">未分组</option>'+groups.map(g=>`<option value="${escapeHTML(g.id)}">${escapeHTML(g.name)}</option>`).join('');select.value=current;
+  const panel=document.getElementById('taskGroupPresets');panel.replaceChildren();
+  for(const group of groups){const row=document.createElement('div');row.className='fitness-presets';const name=document.createElement('span');name.className='preset-category';name.textContent=group.name;const choices=document.createElement('div');choices.className='preset-options';
+    for(const activity of group.activities){const button=document.createElement('button');button.type='button';button.className='preset-chip';button.textContent=activity;button.dataset.taskTitle=`${group.name} · ${activity}`;button.onclick=()=>{taskTitleInput.value=button.dataset.taskTitle;select.value=group.id;syncQuickChoices();};choices.append(button);}row.append(name,choices);panel.append(row);
+  }
+}
+let managedGroupId=null;
+function fillManagedGroup(){const group=normalizeGroups(store.taskGroups).find(g=>g.id===managedGroupId);document.getElementById('managedGroupName').value=group?.name||'';document.getElementById('managedGroupActivities').value=(group?.activities||[]).join('\n');document.getElementById('managedGroupExercise').checked=!!group?.exercise;document.getElementById('taskGroupStatus').textContent='';}
+document.getElementById('manageTaskGroups').onclick=()=>{
+  const groups=normalizeGroups(store.taskGroups);managedGroupId=groups[0]?.id||null;document.getElementById('managedGroupSelect').innerHTML=groups.map(g=>`<option value="${escapeHTML(g.id)}">${escapeHTML(g.name)}</option>`).join('');fillManagedGroup();document.getElementById('taskGroupDialog').showModal();
+};
+document.getElementById('managedGroupSelect').onchange=e=>{managedGroupId=e.target.value;fillManagedGroup();};
+document.getElementById('addTaskGroup').onclick=()=>{managedGroupId=null;document.getElementById('managedGroupSelect').value='';fillManagedGroup();document.getElementById('managedGroupName').focus();};
+document.getElementById('closeTaskGroups').onclick=()=>document.getElementById('taskGroupDialog').close();
+document.getElementById('taskGroupForm').onsubmit=e=>{e.preventDefault();withBusy(async()=>{
+  const name=document.getElementById('managedGroupName').value.trim(),activities=[...new Set(document.getElementById('managedGroupActivities').value.split('\n').map(s=>s.trim()).filter(Boolean))];
+  if(!name||name.length>30||activities.length>20||activities.some(s=>s.length>40))throw new Error('组名最多30字，事项最多20个，每个最多40字');
+  const groups=normalizeGroups(store.taskGroups);if(!managedGroupId&&groups.length>=30)throw new Error('最多创建30个任务组');
+  const group={id:managedGroupId||uid(),name,activities,exercise:document.getElementById('managedGroupExercise').checked};
+  if(managedGroupId)groups[groups.findIndex(g=>g.id===managedGroupId)]=group;else groups.push(group);store.taskGroups=groups;
+  try{await persist();renderAll();document.getElementById('taskGroupDialog').close();}catch(error){document.getElementById('taskGroupStatus').textContent=error.message;}
+})();};
 async function sharedApi(action, payload = {}) {
   const res = await fetch(`${API_BASE}/api/shared/${action}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -200,7 +226,7 @@ function normalizeStore(raw) {
   }
 
   if (typeof raw === "object" && raw.version === 2 && Array.isArray(raw.tasks) && Array.isArray(raw.priority)) {
-    return { version: 2, tasks: raw.tasks, priority: raw.priority, shortcuts: Array.isArray(raw.shortcuts) ? raw.shortcuts.filter(item=>item && typeof item.id === "string" && typeof item.title === "string") : [] };
+    return { ...raw,version: 2, tasks: raw.tasks, priority: raw.priority, taskGroups:normalizeGroups(raw.taskGroups), shortcuts: Array.isArray(raw.shortcuts) ? raw.shortcuts.filter(item=>item && typeof item.id === "string" && typeof item.title === "string") : [] };
   }
 
   return { version: 2, tasks: [], priority: [] };
@@ -241,6 +267,7 @@ async function persist() {
     revision = result.revision;
     lastSaved = structuredClone(store);
     setAppMsg("已保存到云端");
+    publishCalendar(store);
   } catch (error) {
     store = structuredClone(lastSaved);
     renderAll();
@@ -262,9 +289,11 @@ const syncFromRemote = withBusy(loadRemote);
 
 // ---------- render ----------
 function renderAll() {
+  renderTaskGroups();
   renderCalendar();
   renderPriority();
   renderCustomShortcuts();
+  publishCalendar(store);
 }
 
 function timeLabel(date) { return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`; }
@@ -471,6 +500,7 @@ function renderCustomShortcuts() {
     apply.disabled = isOccurrenceEdit() && shortcut.type === "deadline";
     apply.onclick = () => {
       taskTitleInput.value = shortcut.title;
+      document.getElementById('taskGroupSelect').value=groupForTask(shortcut,normalizeGroups(store.taskGroups))?.id||'';
       const date = fromLocalDTInputValue(taskStartInput.value) || fromLocalDTInputValue(taskDeadlineInput.value) || new Date();
       taskIsDeadline.checked = shortcut.type === "deadline";
       applyModalMode(taskIsDeadline.checked);
@@ -514,7 +544,7 @@ document.getElementById("saveShortcutBtn").onclick = withBusy(async () => {
   const rule = isOccurrenceEdit() ? null : readRepeatRule(start);
   store.shortcuts ||= [];
   const existing = store.shortcuts.find(item=>item.title === title);
-  const shortcut = { id: existing?.id || uid(), title, type: deadline ? "deadline" : "scheduled", durationMin: Math.round((duration || 60)/15)*15, startTime: timeLabel(start), recurrence: rule ? { frequency: rule.frequency, weekdays: rule.weekdays } : null };
+  const shortcut = { id: existing?.id || uid(), title,groupId:document.getElementById('taskGroupSelect').value||null, type: deadline ? "deadline" : "scheduled", durationMin: Math.round((duration || 60)/15)*15, startTime: timeLabel(start), recurrence: rule ? { frequency: rule.frequency, weekdays: rule.weekdays } : null };
   if (existing) store.shortcuts[store.shortcuts.indexOf(existing)] = shortcut;
   else store.shortcuts.push(shortcut);
   await persist();
@@ -554,13 +584,14 @@ function readRepeatRule(start) {
 const quickTaskButtons = [...document.querySelectorAll("[data-task-title]")];
 const quickDurationButtons = [...document.querySelectorAll("[data-duration]")];
 function syncQuickChoices() {
-  for (const button of quickTaskButtons) button.setAttribute("aria-pressed", String(button.dataset.taskTitle === taskTitleInput.value.trim()));
+  for (const button of document.querySelectorAll('[data-task-title]')) button.setAttribute("aria-pressed", String(button.dataset.taskTitle === taskTitleInput.value.trim()));
   for (const button of quickDurationButtons) button.setAttribute("aria-pressed", String(Number(button.dataset.duration) === Number(taskDurInput.value)));
   document.getElementById("saveShortcutBtn").textContent = (store.shortcuts || []).some(item=>item.title === taskTitleInput.value.trim()) ? "更新同名快捷任务" : "＋ 存为快捷任务";
 }
 for (const button of quickTaskButtons) {
   button.onclick = () => {
     taskTitleInput.value = button.dataset.taskTitle;
+    document.getElementById('taskGroupSelect').value='';
     syncQuickChoices();
   };
 }
@@ -597,6 +628,7 @@ function applyModalMode(isDeadline) {
 }
 
 function openCreateScheduled(startDate) {
+  document.getElementById('taskGroupSelect').value='';
   if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
   editingOccurrenceDate = null;
@@ -620,6 +652,7 @@ function openCreateScheduled(startDate) {
   openModal();
 }
 function openCreateDeadline(defaultDay = new Date()) {
+  document.getElementById('taskGroupSelect').value='';
   if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
   editingOccurrenceDate = null;
@@ -663,6 +696,7 @@ function fillEditFields() {
   const t = single ? occurrenceFor(source, editingOccurrenceDate) : source;
   if (!t) return;
   setRepeatRule(single ? null : source.recurrence);
+  document.getElementById('taskGroupSelect').value=groupForTask(t,normalizeGroups(store.taskGroups))?.id||'';
   document.getElementById("repeatEditNote").classList.add("hidden");
   const note = document.getElementById("scopeEditNote");
   note.classList.toggle("hidden", !source.recurrence);
@@ -707,6 +741,7 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
 
     const isDeadline = !!taskIsDeadline.checked;
     const now = Date.now();
+    const groupId=document.getElementById('taskGroupSelect').value||null;
 
     if (isOccurrenceEdit()) {
       const source = store.tasks.find(task=>task.id === editingTaskId);
@@ -716,7 +751,7 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
       if (!start) throw new Error("请选择本次任务的开始时间。");
       if (!Number.isFinite(duration) || duration < 15) throw new Error("时长至少 15 分钟。");
       source.overrides ||= {};
-      source.overrides[editingOccurrenceDate] = { title, startLocal: toLocalDTInputValue(start), durationMin: Math.round(duration/15)*15, updatedAt: now };
+      source.overrides[editingOccurrenceDate] = { title,groupId, startLocal: toLocalDTInputValue(start), durationMin: Math.round(duration/15)*15, updatedAt: now };
       source.updatedAt = now;
       await persist();
       viewDate = start;
@@ -729,7 +764,7 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
       if (isDeadline) {
         const dl = fromLocalDTInputValue(taskDeadlineInput.value);
         if (!dl) { setModalMsg("请选择截止时间。"); return; }
-        const t = { id: uid(), type: "deadline", title, deadlineISO: dl.toISOString(), updatedAt: now };
+        const t = { id: uid(), type: "deadline", title,groupId, deadlineISO: dl.toISOString(), updatedAt: now };
         store.tasks.push(t);
         insertByTimeDefault(t);
       } else {
@@ -737,7 +772,7 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
         const dur = parseInt(taskDurInput.value || "60", 10);
         if (!st) { setModalMsg("请选择开始时间。"); return; }
         if (!dur || dur < 15) { setModalMsg("时长至少 15 分钟。"); return; }
-        const t = { id: uid(), type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, recurrence: readRepeatRule(st), completionDates: {}, skippedDates: {}, updatedAt: now };
+        const t = { id: uid(), type: "scheduled", title,groupId, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, recurrence: readRepeatRule(st), completionDates: {}, skippedDates: {}, updatedAt: now };
         store.tasks.push(t);
         insertByTimeDefault(t);
       }
@@ -749,14 +784,14 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
       if (isDeadline) {
         const dl = fromLocalDTInputValue(taskDeadlineInput.value);
         if (!dl) { setModalMsg("请选择截止时间。"); return; }
-        store.tasks[idx] = { id: old.id, completed: !!old.completed, type: "deadline", title, deadlineISO: dl.toISOString(), updatedAt: now };
+        store.tasks[idx] = { id: old.id, completed: !!old.completed, type: "deadline", title,groupId, deadlineISO: dl.toISOString(), updatedAt: now };
       } else {
         const st = fromLocalDTInputValue(taskStartInput.value);
         const dur = parseInt(taskDurInput.value || "60", 10);
         if (!st) { setModalMsg("请选择开始时间。"); return; }
         if (!dur || dur < 15) { setModalMsg("时长至少 15 分钟。"); return; }
         const recurrence = readRepeatRule(st);
-        store.tasks[idx] = { id: old.id, completed: recurrence ? false : !!old.completed, type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, recurrence, completionDates: old.completionDates || {}, skippedDates: old.skippedDates || {}, overrides: old.overrides || {}, updatedAt: now };
+        store.tasks[idx] = { id: old.id, completed: recurrence ? false : !!old.completed, type: "scheduled", title,groupId, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, recurrence, completionDates: old.completionDates || {}, skippedDates: old.skippedDates || {}, overrides: old.overrides || {}, updatedAt: now };
       }
     }
 
@@ -844,7 +879,7 @@ document.getElementById("closeShareBtn").onclick = () => document.getElementById
       if (!/^[a-f0-9]{64}$/.test(key || "")) key = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
     }
     calendarKey = key;
-    history.replaceState(null, "", `${location.pathname}${location.search}#calendar=${key}`);
+    const pageHash=new URLSearchParams(location.hash.slice(1));pageHash.set('calendar',key);history.replaceState(null, "", `${location.pathname}${location.search}#${pageHash}`);
     try { localStorage.setItem(LINK_KEY, key); } catch {}
     renderAll();
     await syncFromRemote();

@@ -27,7 +27,7 @@ export function occurrenceFor(task, dateKey) {
   const override = task.overrides?.[dateKey];
   const date = new Date(override?.startLocal || `${dateKey}T${task.recurrence.time}`);
   if (!Number.isFinite(date.getTime())) return null;
-  return { ...task, title: override?.title ?? task.title, durationMin: override?.durationMin ?? task.durationMin, id: `${task.id}@${dateKey}`, sourceId: task.id, occurrenceDate: dateKey, startISO: date.toISOString(), completed: !!task.completionDates?.[dateKey], isOverride: !!override };
+  return { ...task, title: override?.title ?? task.title, groupId:override&&Object.hasOwn(override,'groupId')?override.groupId:task.groupId, durationMin: override?.durationMin ?? task.durationMin, id: `${task.id}@${dateKey}`, sourceId: task.id, occurrenceDate: dateKey, startISO: date.toISOString(), completed: !!task.completionDates?.[dateKey], isOverride: !!override };
 }
 export function repeatLabel(rule) {
   if (!rule) return '';

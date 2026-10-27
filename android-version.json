@@ -1,8 +1,8 @@
 {
-  "versionCode": 2,
-  "versionName": "0.2.0",
+  "versionCode": 3,
+  "versionName": "0.3.0",
   "packageName": "com.daybook.faq",
-  "url": "https://chosenqc.github.io/Homepage/faq.apk",
-  "sha256": "cb4964620d98976cc6ab44ac31d58276a40e558ea363eedbb2bb548bced2d334",
-  "notes": "身体资料与小米旧版指标趋势；全新设置；F@Q 图标与启动封面；内部刷新与应用内升级。"
+  "url": "https://chosenqc.github.io/Homepage/faq.apk?v=3",
+  "sha256": "21677e2512e0a4ee91b21d9b7a980e903dfc5999b1f0daa562ca871d750e6998",
+  "notes": "日程、健康与 Insight 底部导航；晨间每日最后一条称重趋势；每周锻炼日志和可编辑任务组；多级分类笔记；每日12点未称重系统提醒。"
 }
