@@ -2,6 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="utf-8" />
+  <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>TODO Calendar</title>
   <link rel="stylesheet" href="./style.css" />
@@ -10,62 +11,19 @@
   <main class="container">
     <h1>TODO</h1>
 
-    <!-- 登录/注册 -->
-    <section id="authView" class="card">
-      <div class="row space-between" style="margin-top:0">
-        <h2 id="authTitle" style="margin:0">登录</h2>
-        <div class="row" style="margin-top:0">
-          <button id="toLoginBtn" class="ghost">登录</button>
-          <button id="toRegisterBtn" class="ghost">注册</button>
-        </div>
-      </div>
-
-      <p class="muted small" style="margin-top:8px">
-        站点口令用于访问 Worker（SITE_SECRET）；用户密码用于区分不同用户。
-      </p>
-
-      <div class="row">
-        <input id="usernameInput" placeholder="用户名（1~32, 字母数字_-）" autocomplete="username" />
-      </div>
-
-      <div class="row">
-        <input id="siteSecretInput" placeholder="站点口令（SITE_SECRET）" type="password" />
-      </div>
-
-      <div class="row">
-        <input id="userPwInput" placeholder="用户密码（自己设）" type="password" autocomplete="current-password" />
-      </div>
-
-      <div class="row hidden" id="userPw2Row">
-        <input id="userPw2Input" placeholder="确认用户密码（仅注册）" type="password" autocomplete="new-password" />
-      </div>
-
-      <div class="row">
-        <label class="checkbox"><input id="rememberUser" type="checkbox" /><span>记住用户名</span></label>
-        <label class="checkbox"><input id="rememberSite" type="checkbox" /><span>记住站点口令</span></label>
-        <label class="checkbox"><input id="rememberPw" type="checkbox" /><span>记住用户密码</span></label>
-      </div>
-
-      <div class="row">
-        <button id="authBtn">登录</button>
-      </div>
-
-      <p id="authMsg" class="msg"></p>
-    </section>
-
     <!-- App -->
-    <section id="appView" class="card hidden">
+    <section id="appView" class="card">
       <div class="row space-between" style="margin-top:0">
         <div>
-          <h2 id="helloTitle" style="margin:0">Hi</h2>
-          <p class="muted">周视图（日历任务）+ 侧边栏优先级（拖拽）。</p>
+          <h2 style="margin:0">我的日历</h2>
+          <p class="muted">免登录 · 云端同步。手机和电脑请打开同一个专属同步链接。</p>
         </div>
         <div class="row" style="margin-top:0">
           <button id="prevWeekBtn" class="ghost">← 上一周</button>
           <button id="todayBtn" class="ghost">今天</button>
           <button id="nextWeekBtn" class="ghost">下一周 →</button>
           <button id="syncBtn" class="ghost">同步</button>
-          <button id="logoutBtn" class="ghost">退出</button>
+          <button id="copyLinkBtn" class="ghost">复制同步链接</button>
         </div>
       </div>
 
@@ -144,6 +102,7 @@
     </div>
   </div>
 
-  <script src="./app.js?v=20260305-2"></script>
+  <script src="./app.js?v=20261027-shared-1"></script>
 </body>
 </html>
+

@@ -1,12 +1,3 @@
-// ================== 改这里：你的 Worker 域名 ==================
-const API_BASE = "https://floral-flower-7c16.chen-qiu.workers.dev";
-// =============================================================
-
-const END_REGISTER = "/api/auth/register";
-const END_LOGIN    = "/api/auth/login";
-const END_GET      = "/api/todos/get";
-const END_SET      = "/api/todos/set";
-
 // Calendar config
 const WEEK_START = 0;        // 0=Sunday
 const START_HOUR = 8;
@@ -14,32 +5,15 @@ const END_HOUR   = 20;
 const SLOT_MIN   = 60;       // 60分钟一格
 const ROW_PX     = 28;
 
-// local keys
-const kUser = "todo_v7_user";
-const kSite = "todo_v7_site";
-const kPw   = "todo_v7_pw";
-const kSess = "todo_v7_session";
-
-// DOM auth
-const authView = document.getElementById("authView");
-const authTitle = document.getElementById("authTitle");
-const toLoginBtn = document.getElementById("toLoginBtn");
-const toRegisterBtn = document.getElementById("toRegisterBtn");
-const usernameInput = document.getElementById("usernameInput");
-const siteSecretInput = document.getElementById("siteSecretInput");
-const userPwInput = document.getElementById("userPwInput");
-const userPw2Row = document.getElementById("userPw2Row");
-const userPw2Input = document.getElementById("userPw2Input");
-const rememberUser = document.getElementById("rememberUser");
-const rememberSite = document.getElementById("rememberSite");
-const rememberPw = document.getElementById("rememberPw");
-const authBtn = document.getElementById("authBtn");
-const authMsg = document.getElementById("authMsg");
+const API_BASE = "https://floral-flower-7c16.chen-qiu.workers.dev";
+const LINK_KEY = "todo_calendar_link_v1";
+let calendarKey;
+let revision = null;
+let lastSaved = { version: 2, tasks: [], priority: [] };
+let loaded = false;
 
 // DOM app
 const appView = document.getElementById("appView");
-const helloTitle = document.getElementById("helloTitle");
-const logoutBtn = document.getElementById("logoutBtn");
 const syncBtn = document.getElementById("syncBtn");
 const prevWeekBtn = document.getElementById("prevWeekBtn");
 const nextWeekBtn = document.getElementById("nextWeekBtn");
@@ -68,31 +42,13 @@ const taskDurInput = document.getElementById("taskDurInput");
 const taskDeadlineInput = document.getElementById("taskDeadlineInput");
 
 // state
-let mode = "login";
 let busy = false;
-
-let username = null;
-let siteSecret = null;
-let userPassword = null;
 
 let store = { version: 2, tasks: [], priority: [] };
 let viewDate = new Date();
 let editingTaskId = null;
 
 // ---------- helpers ----------
-function setView(isAuthed) {
-  authView.classList.toggle("hidden", isAuthed);
-  appView.classList.toggle("hidden", !isAuthed);
-}
-function setMode(m) {
-  mode = m;
-  const isReg = mode === "register";
-  authTitle.textContent = isReg ? "注册" : "登录";
-  authBtn.textContent = isReg ? "注册" : "登录";
-  userPw2Row.classList.toggle("hidden", !isReg);
-  setAuthMsg("");
-}
-function setAuthMsg(s) { authMsg.textContent = s || ""; }
 function setAppMsg(s) { appMsg.textContent = s || ""; }
 function setModalMsg(s) { modalMsg.textContent = s || ""; }
 
@@ -101,13 +57,15 @@ function withBusy(fn) {
     if (busy) return;
     busy = true;
     try { await fn(...args); }
+    catch (error) {
+      const message = String(error.message || error);
+      setAppMsg(message);
+      if (!modalOverlay.classList.contains("hidden")) setModalMsg(message);
+    }
     finally { busy = false; }
   };
 }
 
-function validUsername(u) {
-  return /^[a-zA-Z0-9_-]{1,32}$/.test(u);
-}
 function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
@@ -210,27 +168,16 @@ function unwrapTodos(x) {
 }
 
 // ---------- API ----------
-async function api(path, payload) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+async function sharedApi(action, payload = {}) {
+  const res = await fetch(`${API_BASE}/api/shared/${action}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key: calendarKey, ...payload }),
+    signal: AbortSignal.timeout(20000),
   });
-  let data = {};
-  try { data = await res.json(); } catch {}
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  let data;
+  try { data = await res.json(); } catch { throw new Error("云端响应异常，请稍后重试。"); }
+  if (!res.ok) throw new Error(res.status === 409 ? "其他设备已更新任务，请先同步，再重新保存。" : data.error || `HTTP ${res.status}`);
   return data;
-}
-
-async function doRegister(u, site, pw) { return await api(END_REGISTER, { site_secret: site, username: u, user_password: pw }); }
-async function doLogin(u, site, pw) { return await api(END_LOGIN, { site_secret: site, username: u, user_password: pw }); }
-
-async function remoteGetStore(u, site, pw) {
-  const data = await api(END_GET, { site_secret: site, username: u, user_password: pw });
-  return unwrapTodos(data.todos || null);
-}
-async function remoteSetStore(u, site, pw, value) {
-  await api(END_SET, { site_secret: site, username: u, user_password: pw, todos: value });
 }
 
 // ---------- store normalize ----------
@@ -283,91 +230,33 @@ function insertByTimeDefault(newTask) {
   store.priority = out;
 }
 
-// ---------- auth ----------
-async function enterApp(u, site, pw, fetched) {
-  username = u;
-  siteSecret = site;
-  userPassword = pw;
-
-  store = normalizeStore(fetched);
-  ensurePriorityComplete();
-
-  helloTitle.textContent = `Hi, ${u}`;
-  sessionStorage.setItem(kSess, "1");
-
-  if (rememberUser.checked) localStorage.setItem(kUser, u); else localStorage.removeItem(kUser);
-  if (rememberSite.checked) localStorage.setItem(kSite, site); else localStorage.removeItem(kSite);
-  if (rememberPw.checked) localStorage.setItem(kPw, pw); else localStorage.removeItem(kPw);
-
-  setView(true);
-  renderAll();
-}
-
-const handleAuth = withBusy(async () => {
-  try {
-    const u = (usernameInput.value || "").trim();
-    const site = (siteSecretInput.value || "").trim();
-    const pw = (userPwInput.value || "").trim();
-    const pw2 = (userPw2Input.value || "").trim();
-
-    if (!u || !site || !pw) { setAuthMsg("请填写：用户名 / 站点口令 / 用户密码。"); return; }
-    if (!validUsername(u)) { setAuthMsg("用户名只能包含字母数字 _ -，长度 1~32。"); return; }
-
-    if (mode === "register") {
-      if (!pw2) { setAuthMsg("请确认用户密码。"); return; }
-      if (pw !== pw2) { setAuthMsg("两次输入的用户密码不一致。"); return; }
-      setAuthMsg("注册中…");
-      await doRegister(u, site, pw);
-      setAuthMsg("注册成功，登录中…");
-    } else {
-      setAuthMsg("登录中…");
-    }
-
-    // ✅ 先 login 验证口令
-    await doLogin(u, site, pw);
-
-    // ✅ 再 get 拿真实 todos（你的 login 现在很可能不返回 todos）
-    const fetched = await remoteGetStore(u, site, pw);
-
-    await enterApp(u, site, pw, fetched);
-
-    setAuthMsg("");
-    userPw2Input.value = "";
-  } catch (e) {
-    setView(false);
-    setAuthMsg(String(e.message || e));
-  }
-});
-
-// ---------- persistence ----------
+// ---------- cloud persistence ----------
 async function persist() {
+  if (!loaded) throw new Error("尚未从云端加载，请先点击同步。");
   setAppMsg("保存中…");
-  await remoteSetStore(username, siteSecret, userPassword, store);
-  setAppMsg("已保存 ✅");
-  setTimeout(() => setAppMsg(""), 900);
-}
-
-const syncFromRemote = withBusy(async () => {
-  setAppMsg("同步中…");
-  const remote = normalizeStore(await remoteGetStore(username, siteSecret, userPassword));
-
-  const byId = new Map();
-  for (const t of remote.tasks) byId.set(t.id, t);
-  for (const t of store.tasks) {
-    const r = byId.get(t.id);
-    if (!r) byId.set(t.id, t);
-    else byId.set(t.id, (r.updatedAt || 0) >= (t.updatedAt || 0) ? r : t);
+  try {
+    const result = await sharedApi("set", { todos: store, revision });
+    revision = result.revision;
+    lastSaved = structuredClone(store);
+    setAppMsg("已保存到云端");
+  } catch (error) {
+    store = structuredClone(lastSaved);
+    renderAll();
+    throw error;
   }
-  store.tasks = Array.from(byId.values());
-
+}
+async function loadRemote() {
+  setAppMsg("同步中…");
+  const result = await sharedApi("get");
+  store = normalizeStore(result.todos);
   ensurePriorityComplete();
-
-  await persist();
+  revision = result.revision;
+  lastSaved = structuredClone(store);
+  loaded = true;
   renderAll();
-
-  setAppMsg("同步完成 ✅");
-  setTimeout(() => setAppMsg(""), 900);
-});
+  setAppMsg("已同步到最新任务");
+}
+const syncFromRemote = withBusy(loadRemote);
 
 // ---------- render ----------
 function renderAll() {
@@ -666,6 +555,7 @@ function applyModalMode(isDeadline) {
 }
 
 function openCreateScheduled(startDate) {
+  if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
   modalTitle.textContent = "新建日历任务";
   modalDeleteBtn.classList.add("hidden");
@@ -680,6 +570,7 @@ function openCreateScheduled(startDate) {
   openModal();
 }
 function openCreateDeadline(defaultDay = new Date()) {
+  if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
   modalTitle.textContent = "新建 Deadline 任务";
   modalDeleteBtn.classList.add("hidden");
@@ -793,35 +684,40 @@ todayBtn.onclick = () => { viewDate = new Date(); renderCalendar(); };
 // ---------- sidebar actions ----------
 newDeadlineBtn.onclick = () => openCreateDeadline(viewDate);
 syncBtn.addEventListener("click", syncFromRemote);
-logoutBtn.addEventListener("click", () => {
-  sessionStorage.removeItem(kSess);
-  username = null; siteSecret = null; userPassword = null;
-  store = { version: 2, tasks: [], priority: [] };
-  setView(false);
-  setAuthMsg("");
-});
+
+document.getElementById("copyLinkBtn").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    setAppMsg("同步链接已复制，请在手机或电脑上打开；仅分享给可信的人。");
+  } catch {
+    setAppMsg("请复制浏览器地址栏中的完整链接（包含 # 后面的内容）。");
+  }
+};
 
 // ---------- init ----------
-authBtn.addEventListener("click", handleAuth);
-toLoginBtn.addEventListener("click", () => setMode("login"));
-toRegisterBtn.addEventListener("click", () => setMode("register"));
-
-(function init() {
-  setMode("login");
-  setView(false);
+(async function init() {
   modalOverlay.classList.add("hidden");
-
-  const savedUser = localStorage.getItem(kUser);
-  const savedSite = localStorage.getItem(kSite);
-  const savedPw = localStorage.getItem(kPw);
-
-  if (savedUser) { usernameInput.value = savedUser; rememberUser.checked = true; }
-  if (savedSite) { siteSecretInput.value = savedSite; rememberSite.checked = true; }
-  if (savedPw) { userPwInput.value = savedPw; rememberPw.checked = true; }
-
-  viewDate = new Date();
-
-  window.addEventListener("resize", () => {
-    if (!appView.classList.contains("hidden")) renderCalendar();
-  });
+  try {
+    const hash = new URLSearchParams(location.hash.slice(1));
+    let key = hash.get("calendar");
+    if (key && !/^[a-f0-9]{64}$/.test(key)) throw new Error("同步链接无效，请检查完整地址。");
+    if (!key) {
+      try { key = localStorage.getItem(LINK_KEY); } catch {}
+      if (!/^[a-f0-9]{64}$/.test(key || "")) key = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
+    }
+    calendarKey = key;
+    history.replaceState(null, "", `${location.pathname}${location.search}#calendar=${key}`);
+    try { localStorage.setItem(LINK_KEY, key); } catch {}
+    renderAll();
+    await syncFromRemote();
+  } catch (error) {
+    setAppMsg(String(error.message || error));
+  }
+  window.addEventListener("resize", renderCalendar);
+  const refresh = () => {
+    if (calendarKey && document.visibilityState === "visible" && modalOverlay.classList.contains("hidden")) syncFromRemote();
+  };
+  window.addEventListener("focus", refresh);
+  document.addEventListener("visibilitychange", refresh);
+  setInterval(refresh, 60000);
 })();
