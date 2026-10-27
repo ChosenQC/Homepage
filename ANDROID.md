@@ -12,11 +12,11 @@ Android 0.3.1 中开启「午间提醒」，允许系统通知。每天手机当
 
 ## 使用
 
-健康页新增「日常记录」：活动热量和睡眠由 iPhone 快捷指令上传，同一个 Book 可在网页和安卓查看，不需要升级 APK。iPhone Safari 打开 Book → 健康 → 连接苹果健康，可复制专属上传连接码，[下载已签名的快捷指令](https://chosenqc.github.io/Homepage/Daybook-Health-Sync.shortcut)，导入时只粘贴连接码，首次运行允许读取这两类健康数据。无需填写地址或手工拼接动作；[导入说明](https://chosenqc.github.io/Homepage/apple-health-setup.html)。连接码只允许上传热量和睡眠，不能读取数据或编辑日程、笔记；可重新生成以替换旧连接。
+健康页新增「日常记录」：活动热量和睡眠由 iPhone 快捷指令上传，同一个 Book 可在网页和安卓查看，不需要升级 APK。iPhone Safari 打开 Book → 健康 → 连接苹果健康，可复制专属上传连接码，[下载已签名的快捷指令](https://chosenqc.github.io/Homepage/Daybook-Health-Sync-v2.shortcut)，导入时只粘贴连接码，首次运行允许读取这两类健康数据。无需填写地址或手工拼接动作；[导入说明](https://chosenqc.github.io/Homepage/apple-health-setup.html)。连接码只允许上传热量和睡眠，不能读取数据或编辑日程、笔记；可重新生成以替换旧连接。
 
 活动热量只累计已记录的活动能量，不包含静息能量，也不推算未佩戴时的消耗。缺少记录显示横线，有真实 0 样本才显示 0。睡眠按结束日期归档，排除卧床、清醒并合并重复、重叠时段；分期缺失时显示未分期，不推算完整睡眠。多来源优先采用手表，快捷指令保留样本来源，不需要手动配置设备筛选。未知睡眠阶段保留原时段但不计入睡眠，页面会提示。
 
-上传原始样本按 UTC 日期分别加密，页面按设备当地日期汇总；同一类型、起止时间和来源重复上传只保留一条。最近 3 天的重复补传不会累加；空读取不会清除历史记录。网页加载最近 120 天原始记录。快捷指令需先在 iPhone 解锁时实测，长时间锁屏可能无法读取健康数据；可设置为打开「健康」App 时运行。
+上传原始样本按 UTC 日期分别加密，页面按设备当地日期汇总；同一类型、起止时间和来源重复上传只保留一条。最近 3 天的重复补传不会累加；空读取不会清除历史记录。网页加载最近 120 天原始记录。快捷指令需先在 iPhone 解锁时实测，长时间锁屏可能无法读取健康数据；在 iPhone 上添加一次自动化：特定时间 → 每天 22:00（手机当地时间，可改）→ 立即运行 → Daybook-Health-Sync-v2。新系统也可在快捷指令编辑页的「自动化」中添加触发器。长时间锁屏可能阻止健康数据读取，可再加「打开 Safari 时」运行同一快捷指令作为自动补传。定时触发不等于保证锁屏读取成功。
 
 1. 在 OPPO 上安装 [faq.apk](https://chosenqc.github.io/Homepage/faq.apk)。桌面名称为 F@Q，内部保留 Daybook。支持 Android 12 及以上。
 2. 打开 App → 设置 → 同步 Book → 粘贴已有的完整同步链接 → 切换。新安装默认创建新 Book，不会自动读取浏览器的 Book。
@@ -50,3 +50,5 @@ GitHub Actions `Build Daybook Android` 使用 JDK 17、Gradle 8.11.1、Android S
 `node body-metrics.check.mjs` 对照上游 Python 生成的 12 组参考值，验证算法及分支边界。
 `node suite.check.mjs` 验证晨间筛选、时区、每周锻炼及重复任务；`node worker/insight.check.mjs` 验证笔记加密、分级分类、修订冲突与恢复。Android 构建前运行 MorningWindowCheck，验证时间边界、跨时区及夏令时。
 `node apple-health.check.mjs` 验证热量单位、缺失与零、来源选择、睡眠跨午夜、去重与分期合并；`node worker/apple.check.mjs` 验证独立加密、仅上传连接码、Book 隔离、轮换、空样本、校验和重复上传。独立 QA Book 的云端回归使用本地 apple-cloud.check.mjs，模拟数据与真实 Book 分开。
+
+快捷指令 v2：移除了在部分 iOS 上显示空白条件并报错的「如果」分支，改为显示真实服务器响应；已签名，仍需 iPhone 首次运行验证。旧版用户请导入 v2，并将自动化指向 v2 名称。
