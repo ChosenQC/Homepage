@@ -1,0 +1,290 @@
+[
+  {
+    "profile": {
+      "heightCm": 175,
+      "age": 30,
+      "sex": "male",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 70,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 500
+    },
+    "expected": {
+      "bodyFatPct": 19.22839285714285,
+      "waterPct": 55.4093225,
+      "boneKg": 2.8774347075,
+      "muscleKg": 53.6626902925,
+      "proteinPct": 21.251663632142865,
+      "bodyAge": 26.01319999999999,
+      "bmi": 22.857142857142858,
+      "bmrKcal": 1525.5900000000001,
+      "visceralFat": 9.649999999999999
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 160,
+      "age": 49,
+      "sex": "male",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 49,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 510
+    },
+    "expected": {
+      "bodyFatPct": 11.658639999999998,
+      "waterPct": 60.60217296,
+      "boneKg": 2.0394187344,
+      "muscleKg": 41.2478476656,
+      "proteinPct": 23.57710799020409,
+      "bodyAge": 26.448200000000003,
+      "bmi": 19.140624999999996,
+      "bmrKcal": 1052.6999999999998,
+      "visceralFat": 5.195000000000002
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 161,
+      "age": 50,
+      "sex": "male",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 50,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 600
+    },
+    "expected": {
+      "bodyFatPct": 13.534126072000008,
+      "waterPct": 59.31558951460799,
+      "boneKg": 2.0365592320439996,
+      "muscleKg": 41.196377731956,
+      "proteinPct": 23.077165949304003,
+      "bodyAge": 31.688599999999994,
+      "bmi": 19.28937926777516,
+      "bmrKcal": 1057.9139999999998,
+      "visceralFat": 5.652000000000005
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 165,
+      "age": 25,
+      "sex": "male",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 60,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 450
+    },
+    "expected": {
+      "bodyFatPct": 16.910038500000002,
+      "waterPct": 56.999713588999995,
+      "boneKg": 2.5850421299,
+      "muscleKg": 47.268934770099996,
+      "proteinPct": 21.781844361166662,
+      "bodyAge": 19.646200000000007,
+      "bmi": 22.03856749311295,
+      "bmrKcal": 1428.57,
+      "visceralFat": 6.205000000000005
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 166,
+      "age": 50,
+      "sex": "male",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 61,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 550
+    },
+    "expected": {
+      "bodyFatPct": 18.924221639344264,
+      "waterPct": 55.61798395540983,
+      "boneKg": 2.512047135184,
+      "muscleKg": 46.944177664816,
+      "proteinPct": 21.33968434756723,
+      "bodyAge": 35.44520000000002,
+      "bmi": 22.136739730004358,
+      "bmrKcal": 1218.3599999999997,
+      "visceralFat": 10.238
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 190,
+      "age": 60,
+      "sex": "male",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 100,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 700
+    },
+    "expected": {
+      "bodyFatPct": 31.88662000000001,
+      "waterPct": 48.63295332,
+      "boneKg": 3.4743832003999993,
+      "muscleKg": 64.6389967996,
+      "proteinPct": 16.006043479599995,
+      "bodyAge": 65.18170000000002,
+      "bmi": 27.70083102493075,
+      "bmrKcal": 1692.9,
+      "visceralFat": 16.425472432681303
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 175,
+      "age": 30,
+      "sex": "female",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 70,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 500
+    },
+    "expected": {
+      "bodyFatPct": 32.069263428571425,
+      "waterPct": 48.502545912,
+      "boneKg": 2.8119126335,
+      "muscleKg": 44.7396029665,
+      "proteinPct": 15.411172611571423,
+      "bodyAge": 32.950299999999984,
+      "bmi": 22.857142857142858,
+      "bmrKcal": 1323.8939999999998,
+      "visceralFat": 5.844999999999999
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 160,
+      "age": 49,
+      "sex": "female",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 49,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 510
+    },
+    "expected": {
+      "bodyFatPct": 25.642666122448976,
+      "waterPct": 51.00913104,
+      "boneKg": 1.9738966604,
+      "muscleKg": 34.4611969396,
+      "proteinPct": 19.319842306122453,
+      "bodyAge": 25.734899999999996,
+      "bmi": 19.140624999999996,
+      "bmrKcal": 997.6428,
+      "visceralFat": 3.6529999999999987
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 161,
+      "age": 50,
+      "sex": "female",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 50,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 600
+    },
+    "expected": {
+      "bodyFatPct": 24.669516400000003,
+      "waterPct": 51.676711749599995,
+      "boneKg": 1.9710371580439996,
+      "muscleKg": 35.694204641956,
+      "proteinPct": 19.711697534312002,
+      "bodyAge": 30.393299999999996,
+      "bmi": 19.28937926777516,
+      "bmrKcal": 1001.2490399999999,
+      "visceralFat": 3.882999999999999
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 165,
+      "age": 25,
+      "sex": "female",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 60,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 450
+    },
+    "expected": {
+      "bodyFatPct": 29.29765833333333,
+      "waterPct": 50.48147195,
+      "boneKg": 2.5195200559,
+      "muscleKg": 39.9018849441,
+      "proteinPct": 16.02166962349999,
+      "bodyAge": 23.948800000000006,
+      "bmi": 22.03856749311295,
+      "bmrKcal": 1256.8116000000002,
+      "visceralFat": 4.494999999999999
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 166,
+      "age": 50,
+      "sex": "female",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 61,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 550
+    },
+    "expected": {
+      "bodyFatPct": 30.287614619278692,
+      "waterPct": 49.774643161835016,
+      "boneKg": 2.446525061184,
+      "muscleKg": 40.078030021056,
+      "proteinPct": 15.927045397273176,
+      "bodyAge": 40.098200000000006,
+      "bmi": 22.136739730004358,
+      "bmrKcal": 1111.52184,
+      "visceralFat": 6.366599999999998
+    }
+  },
+  {
+    "profile": {
+      "heightCm": 190,
+      "age": 60,
+      "sex": "female",
+      "year": 2026
+    },
+    "record": {
+      "weightKg": 100,
+      "measuredAt": "2026-10-27T10:00:00Z",
+      "impedanceOhm": 700
+    },
+    "expected": {
+      "bodyFatPct": 39.02724985600001,
+      "waterPct": 43.53454360281599,
+      "boneKg": 3.4088611263999993,
+      "muscleKg": 57.56388901759999,
+      "proteinPct": 14.029345414784004,
+      "bodyAge": 80,
+      "bmi": 27.70083102493075,
+      "bmrKcal": 1437.9816,
+      "visceralFat": 9.731684456211887
+    }
+  }
+]

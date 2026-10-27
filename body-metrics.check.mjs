@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {bodyMetrics,validProfile} from './body-metrics.mjs';
+const fixtures=JSON.parse(readFileSync(new URL('./body-metrics-fixtures.json',import.meta.url)));
+for(const f of fixtures)for(const [key,value] of Object.entries(f.expected))assert.ok(Math.abs(bodyMetrics(f.record,f.profile)[key]-value)<1e-8,`${key}: ${JSON.stringify(f.profile)}`);
+const {record,profile}=fixtures[0];
+assert.equal(bodyMetrics(record,null).bodyFatPct,undefined);
+assert.equal(bodyMetrics({...record,impedanceOhm:null},profile).bodyFatPct,undefined);
+assert.equal(bodyMetrics({...record,impedanceOhm:65534},profile).waterPct,undefined);
+assert.ok(Number.isFinite(bodyMetrics({...record,impedanceOhm:null},profile).bmi));
+assert.deepEqual(bodyMetrics({...record,weightKg:NaN},profile),{});
+assert.equal(validProfile({...profile,age:'30'}),false);
+assert.equal(validProfile({...profile,heightCm:0}),false);
+assert.deepEqual(bodyMetrics({...record,measuredAt:'2025-10-27T10:00:00Z'},profile),bodyMetrics(record,{...profile,age:profile.age-1}));
+console.log('PASS: 12 independent Python reference fixtures, sex/age/weight branch boundaries, missing impedance, invalid profile and historical age');
