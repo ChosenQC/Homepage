@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8"/><meta name="referrer" content="no-referrer"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#f6f7f3"/>
-  <title>日程 · Daybook</title><link rel="stylesheet" href="./style.css?v=20261027-custom-1"/>
+  <title>日程 · Daybook</title><link rel="stylesheet" href="./style.css?v=20261027-scale-1"/>
   <script>if(location.protocol === "file:") location.replace("https://chosenqc.github.io/Homepage/" + location.hash);</script>
 </head>
 <body>
@@ -23,6 +23,7 @@
     </header>
     <section id="sharePanel" class="share-panel hidden" aria-label="跨设备同步"><label for="shareLinkInput">手机和电脑打开同一个完整链接</label><div class="share-link-row"><input id="shareLinkInput" type="text" readonly aria-label="线上同步链接"/><a id="openOnlineLink" target="_blank" rel="noopener noreferrer">打开线上版 ↗</a><button id="closeShareBtn" type="button" class="icon-button" aria-label="关闭同步链接">×</button></div></section>
     <section class="page-heading"><div><div class="eyebrow" id="monthTitle">周日程</div><h1>本周日程<span class="heading-dot"> / </span><span id="monthHeading"></span></h1></div><button id="newTaskBtn" class="primary-button"><svg><use href="#i-plus"/></svg><span>新建任务</span></button></section>
+    <section class="body-panel" aria-label="身体数据趋势"><div class="body-top"><div><div class="eyebrow">BODY TRENDS</div><h2>身体趋势 <span id="bodyLatest" class="body-latest">—</span></h2></div><div class="body-tools"><select id="bodyMetric" aria-label="趋势指标"><option value="weightKg">体重 · kg</option><option value="impedanceOhm">阻抗 · Ω</option></select><select id="bodyRange" aria-label="趋势时间范围"><option value="30">近 30 天</option><option value="90">近 90 天</option><option value="all">全部</option></select><button id="bodySettings" class="link-button" type="button">连接设置</button></div></div><div id="bodyChart" class="body-chart"></div><div class="body-bottom"><span id="bodyTrendSummary"></span><span id="bodyStatus" role="status"></span></div><div id="bodyHelp" class="body-help hidden">在 Daybook 安卓 App 的设置中绑定体脂秤，后台记录会自动同步到这个 Book。<a href="./daybook.apk">下载安卓测试版</a></div><details id="bodyHistory" class="body-history hidden"><summary>测量记录</summary><div class="body-table-wrap"><table><thead><tr><th>测量时间</th><th>体重 kg</th><th>阻抗 Ω</th></tr></thead><tbody id="bodyHistoryRows"></tbody></table></div></details></section>
     <div class="workspace">
       <section class="agenda" aria-label="每周日程">
         <div class="agenda-toolbar"><div class="week-heading"><h2 id="weekTitle"></h2><span class="week-count" id="weekCount"></span></div><nav class="week-nav" aria-label="切换周"><button id="prevWeekBtn" class="icon-button" aria-label="上一周" title="上一周"><svg><use href="#i-left"/></svg></button><button id="todayBtn">今天</button><button id="nextWeekBtn" class="icon-button" aria-label="下一周" title="下一周"><svg><use href="#i-right"/></svg></button></nav></div>
@@ -48,5 +49,6 @@
     <p id="scopeEditNote" class="repeat-note hidden"></p><p id="modalMsg" class="modal-message" role="alert"></p><div class="modal-actions"><button id="modalDeleteBtn" class="delete-button hidden">删除任务</button><button id="skipOccurrenceBtn" class="skip-button hidden">跳过本次</button><button id="resetOccurrenceBtn" class="skip-button hidden">恢复原安排</button><button id="modalSaveBtn" class="primary-button">保存</button></div>
   </section></div>
   <script type="module" src="./app.js?v=20261027-custom-1"></script>
+  <script type="module" src="./health.mjs?v=20261027-scale-1"></script>
 </body>
 </html>
