@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8"/><meta name="referrer" content="no-referrer"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#f6f7f3"/>
-  <title>日程 · Daybook</title><link rel="stylesheet" href="./style.css?v=20261027-complete-1"/>
+  <title>日程 · Daybook</title><link rel="stylesheet" href="./style.css?v=20261027-quick-1"/>
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -33,11 +33,15 @@
   <div id="modalOverlay" class="modal-overlay hidden"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
     <div class="modal-header"><h2 id="modalTitle">新建任务</h2><button id="modalCloseBtn" class="icon-button" aria-label="关闭"><svg><use href="#i-close"/></svg></button></div>
     <label class="field"><span>任务名称</span><input id="taskTitleInput" placeholder="准备做些什么？" autocomplete="off"/></label>
+    <div class="quick-activities" role="group" aria-label="快捷事项">
+      <div class="fitness-presets"><span class="preset-category">健身</span><div class="preset-options"><button type="button" class="preset-chip" data-task-title="健身 · 练腿" aria-pressed="false">练腿</button><button type="button" class="preset-chip" data-task-title="健身 · 练胸" aria-pressed="false">练胸</button><button type="button" class="preset-chip" data-task-title="健身 · 练背" aria-pressed="false">练背</button></div></div>
+      <div class="preset-options"><button type="button" class="preset-chip" data-task-title="游泳" aria-pressed="false">游泳</button><button type="button" class="preset-chip" data-task-title="工作" aria-pressed="false">工作</button><button type="button" class="preset-chip" data-task-title="开会" aria-pressed="false">开会</button><button type="button" class="preset-chip" data-task-title="游戏" aria-pressed="false">游戏</button></div>
+    </div>
     <label class="type-toggle"><input id="taskIsDeadline" type="checkbox"/><svg><use href="#i-flag"/></svg><span>截止事项</span></label>
-    <div id="scheduledFields" class="modal-fields"><label class="field"><span>开始时间</span><input id="taskStartInput" type="datetime-local"/></label><label class="field"><span>时长（分钟）</span><input id="taskDurInput" type="number" min="15" step="15" value="60"/></label></div>
+    <div id="scheduledFields" class="modal-fields"><label class="field"><span>开始时间</span><input id="taskStartInput" type="datetime-local"/></label><label class="field"><span>时长（分钟）</span><input id="taskDurInput" type="number" min="15" step="15" value="60"/></label><div class="duration-presets" role="group" aria-label="快捷时长"><button type="button" class="preset-chip" data-duration="30" aria-pressed="false">30 分钟</button><button type="button" class="preset-chip" data-duration="60" aria-pressed="true">60 分钟</button><button type="button" class="preset-chip" data-duration="90" aria-pressed="false">90 分钟</button><button type="button" class="preset-chip" data-duration="120" aria-pressed="false">120 分钟</button></div></div>
     <div id="deadlineFields" class="hidden"><label class="field"><span>截止时间</span><input id="taskDeadlineInput" type="datetime-local"/></label></div>
     <p id="modalMsg" class="modal-message" role="alert"></p><div class="modal-actions"><button id="modalDeleteBtn" class="delete-button hidden">删除任务</button><button id="modalSaveBtn" class="primary-button">保存</button></div>
   </section></div>
-  <script src="./app.js?v=20261027-complete-1"></script>
+  <script src="./app.js?v=20261027-quick-1"></script>
 </body>
 </html>

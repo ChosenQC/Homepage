@@ -442,12 +442,33 @@ function taskMeta(t) {
 function taskTitleForLabel(task) { return task.title || "任务"; }
 
 // ---------- modal ----------
+const quickTaskButtons = [...document.querySelectorAll("[data-task-title]")];
+const quickDurationButtons = [...document.querySelectorAll("[data-duration]")];
+function syncQuickChoices() {
+  for (const button of quickTaskButtons) button.setAttribute("aria-pressed", String(button.dataset.taskTitle === taskTitleInput.value.trim()));
+  for (const button of quickDurationButtons) button.setAttribute("aria-pressed", String(Number(button.dataset.duration) === Number(taskDurInput.value)));
+}
+for (const button of quickTaskButtons) {
+  button.onclick = () => {
+    taskTitleInput.value = button.dataset.taskTitle;
+    syncQuickChoices();
+  };
+}
+for (const button of quickDurationButtons) {
+  button.onclick = () => {
+    taskDurInput.value = button.dataset.duration;
+    syncQuickChoices();
+  };
+}
+taskTitleInput.addEventListener("input", syncQuickChoices);
+taskDurInput.addEventListener("input", syncQuickChoices);
 let modalReturnFocus;
 function openModal() {
   modalReturnFocus = document.activeElement;
   modalOverlay.classList.remove("hidden");
   document.body.style.overflow = "hidden";
   setModalMsg("");
+  syncQuickChoices();
   taskTitleInput.focus();
 }
 function closeModal() {
