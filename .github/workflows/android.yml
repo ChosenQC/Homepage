@@ -1,0 +1,32 @@
+name: Build Daybook Android
+on:
+  workflow_dispatch:
+  push:
+    paths: ['*.java', '*.gradle', 'gradle.properties', 'AndroidManifest.xml', '.github/workflows/android.yml']
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Verify scale packets
+        run: |
+          mkdir -p build/packet-check
+          javac -d build/packet-check ScalePacket.java ScalePacketCheck.java
+          java -cp build/packet-check com.daybook.scalebridge.ScalePacketCheck
+      - name: Build APK
+        run: gradle --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Daybook-Android
+          path: build/outputs/apk/debug/*.apk
