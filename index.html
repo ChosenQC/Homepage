@@ -1,108 +1,43 @@
 <!doctype html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="referrer" content="no-referrer" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TODO Calendar</title>
-  <link rel="stylesheet" href="./style.css" />
+  <meta charset="utf-8"/><meta name="referrer" content="no-referrer"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#f6f7f3"/>
+  <title>日程 · Daybook</title><link rel="stylesheet" href="./style.css?v=20261027-daybook-1"/>
 </head>
 <body>
-  <main class="container">
-    <h1>TODO</h1>
-
-    <!-- App -->
-    <section id="appView" class="card">
-      <div class="row space-between" style="margin-top:0">
-        <div>
-          <h2 style="margin:0">我的日历</h2>
-          <p class="muted">免登录 · 云端同步。手机和电脑请打开同一个专属同步链接。</p>
-        </div>
-        <div class="row" style="margin-top:0">
-          <button id="prevWeekBtn" class="ghost">← 上一周</button>
-          <button id="todayBtn" class="ghost">今天</button>
-          <button id="nextWeekBtn" class="ghost">下一周 →</button>
-          <button id="syncBtn" class="ghost">同步</button>
-          <button id="copyLinkBtn" class="ghost">复制同步链接</button>
-        </div>
-      </div>
-
-      <div class="layout">
-        <!-- Calendar -->
-        <section class="calendar card2">
-          <div class="calTop">
-            <div class="weekTitle" id="weekTitle"></div>
-            <div class="muted small">点击某个时间格添加任务；拖动侧边栏可改优先级。</div>
-          </div>
-
-          <div class="calGrid" id="calGrid">
-            <!-- JS render -->
-          </div>
-        </section>
-
-        <!-- Sidebar -->
-        <aside class="sidebar card2">
-          <div class="sideTop">
-            <div class="sideTitle">优先级</div>
-            <div class="muted small">默认按时间顺序；可拖拽排序。</div>
-          </div>
-
-          <div class="sideActions row" style="margin-top:10px">
-            <button id="newDeadlineBtn">+ 新建 Deadline</button>
-          </div>
-
-          <ul id="priorityList" class="plist"></ul>
-          <p id="appMsg" class="muted small"></p>
-        </aside>
-      </div>
-    </section>
-  </main>
-
-  <!-- Modal -->
-  <div id="modalOverlay" class="modalOverlay hidden">
-    <div class="modal card">
-      <div class="row space-between" style="margin-top:0">
-        <h3 id="modalTitle" style="margin:0">新建任务</h3>
-        <button id="modalCloseBtn" class="ghost">关闭</button>
-      </div>
-
-      <div class="row">
-        <input id="taskTitleInput" placeholder="任务标题" />
-      </div>
-
-      <div class="row">
-        <label class="checkbox"><input id="taskIsDeadline" type="checkbox" /><span>这是 Deadline 任务（不占日历格）</span></label>
-      </div>
-
-      <div id="scheduledFields">
-        <div class="row">
-          <div class="muted small" style="min-width:120px">开始时间</div>
-          <input id="taskStartInput" type="datetime-local" />
-        </div>
-
-        <div class="row">
-          <div class="muted small" style="min-width:120px">时长（分钟）</div>
-          <input id="taskDurInput" type="number" min="15" step="15" value="60" />
-        </div>
-      </div>
-
-      <div id="deadlineFields" class="hidden">
-        <div class="row">
-          <div class="muted small" style="min-width:120px">Deadline</div>
-          <input id="taskDeadlineInput" type="datetime-local" />
-        </div>
-      </div>
-
-      <div class="row">
-        <button id="modalSaveBtn">保存</button>
-        <button id="modalDeleteBtn" class="del hidden">删除</button>
-      </div>
-
-      <p id="modalMsg" class="msg"></p>
+  <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0M16 8l1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(2 0) scale(.85 1)"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4c5-4 9 4 14 0v11c-5 4-9-4-14 0"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4M16 3v4M4 11h16m-11 5 2 2 4-4"/></symbol>
+  </defs></svg>
+  <main class="shell" id="appView">
+    <header class="app-header">
+      <div class="brand"><span class="brand-mark"><svg><use href="#i-calendar"/></svg></span><span>日程<span class="brand-en">DAYBOOK</span></span></div>
+      <div class="header-actions"><button id="syncBtn" class="icon-button" aria-label="同步任务" title="同步任务"><svg><use href="#i-sync"/></svg></button><button id="copyLinkBtn" class="link-button" title="复制专属同步链接"><svg><use href="#i-link"/></svg><span>同步链接</span></button></div>
+    </header>
+    <section class="page-heading"><div><div class="eyebrow" id="monthTitle">周日程</div><h1>本周日程<span class="heading-dot"> / </span><span id="monthHeading"></span></h1></div><button id="newTaskBtn" class="primary-button"><svg><use href="#i-plus"/></svg><span>新建任务</span></button></section>
+    <div class="workspace">
+      <section class="agenda" aria-label="每周日程">
+        <div class="agenda-toolbar"><div class="week-heading"><h2 id="weekTitle"></h2><span class="week-count" id="weekCount"></span></div><nav class="week-nav" aria-label="切换周"><button id="prevWeekBtn" class="icon-button" aria-label="上一周" title="上一周"><svg><use href="#i-left"/></svg></button><button id="todayBtn">今天</button><button id="nextWeekBtn" class="icon-button" aria-label="下一周" title="下一周"><svg><use href="#i-right"/></svg></button></nav></div>
+        <div class="day-list" id="calGrid"></div>
+      </section>
+      <aside class="sidebar" aria-label="任务优先级"><div class="sidebar-heading"><h2><span class="section-dot"></span>优先安排</h2><span class="count-pill" id="priorityCount">0</span></div><ul id="priorityList" class="priority-list"></ul><button id="newDeadlineBtn" class="deadline-button"><svg><use href="#i-flag"/></svg>添加截止事项<svg class="button-plus"><use href="#i-plus"/></svg></button></aside>
     </div>
-  </div>
-
-  <script src="./app.js?v=20261027-shared-1"></script>
+    <footer class="app-footer"><span class="footer-brand">DAYBOOK</span><p id="appMsg" role="status" aria-live="polite"></p></footer>
+  </main>
+  <div id="modalOverlay" class="modal-overlay hidden"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
+    <div class="modal-header"><h2 id="modalTitle">新建任务</h2><button id="modalCloseBtn" class="icon-button" aria-label="关闭"><svg><use href="#i-close"/></svg></button></div>
+    <label class="field"><span>任务名称</span><input id="taskTitleInput" placeholder="准备做些什么？" autocomplete="off"/></label>
+    <label class="type-toggle"><input id="taskIsDeadline" type="checkbox"/><svg><use href="#i-flag"/></svg><span>截止事项</span></label>
+    <div id="scheduledFields" class="modal-fields"><label class="field"><span>开始时间</span><input id="taskStartInput" type="datetime-local"/></label><label class="field"><span>时长（分钟）</span><input id="taskDurInput" type="number" min="15" step="15" value="60"/></label></div>
+    <div id="deadlineFields" class="hidden"><label class="field"><span>截止时间</span><input id="taskDeadlineInput" type="datetime-local"/></label></div>
+    <p id="modalMsg" class="modal-message" role="alert"></p><div class="modal-actions"><button id="modalDeleteBtn" class="delete-button hidden">删除任务</button><button id="modalSaveBtn" class="primary-button">保存</button></div>
+  </section></div>
+  <script src="./app.js?v=20261027-daybook-1"></script>
 </body>
 </html>
-

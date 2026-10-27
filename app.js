@@ -1,9 +1,5 @@
 // Calendar config
 const WEEK_START = 0;        // 0=Sunday
-const START_HOUR = 8;
-const END_HOUR   = 20;
-const SLOT_MIN   = 60;       // 60分钟一格
-const ROW_PX     = 28;
 
 const API_BASE = "https://floral-flower-7c16.chen-qiu.workers.dev";
 const LINK_KEY = "todo_calendar_link_v1";
@@ -49,7 +45,10 @@ let viewDate = new Date();
 let editingTaskId = null;
 
 // ---------- helpers ----------
-function setAppMsg(s) { appMsg.textContent = s || ""; }
+function setAppMsg(s) {
+  appMsg.textContent = s || "";
+  appMsg.classList.toggle("is-error", /失败|无法|异常|无效|重试|Failed|Error/.test(s || ""));
+}
 function setModalMsg(s) { modalMsg.textContent = s || ""; }
 
 function withBusy(fn) {
@@ -108,7 +107,7 @@ function taskTimeKey(task) {
 }
 
 function deadlineBadge(deadlineISO) {
-  if (!deadlineISO) return { text: "DDL", cls: "badge" };
+  if (!deadlineISO) return { text: "截止", cls: "badge" };
   const now = new Date();
   const ddl = new Date(deadlineISO);
   const today = new Date(now); today.setHours(0,0,0,0);
@@ -116,7 +115,7 @@ function deadlineBadge(deadlineISO) {
   if (d0 < today) return { text: "逾期", cls: "badge overdue" };
   const diffDays = Math.round((d0 - today) / (1000*60*60*24));
   if (diffDays <= 3) return { text: "临近", cls: "badge soon" };
-  return { text: "DDL", cls: "badge" };
+  return { text: "截止", cls: "badge" };
 }
 
 // ---- robust parse/unwarp for issue body / wrappers ----
@@ -238,7 +237,7 @@ async function persist() {
     const result = await sharedApi("set", { todos: store, revision });
     revision = result.revision;
     lastSaved = structuredClone(store);
-    setAppMsg("已保存到云端");
+    setAppMsg("已保存");
   } catch (error) {
     store = structuredClone(lastSaved);
     renderAll();
@@ -254,7 +253,7 @@ async function loadRemote() {
   lastSaved = structuredClone(store);
   loaded = true;
   renderAll();
-  setAppMsg("已同步到最新任务");
+  setAppMsg("已同步");
 }
 const syncFromRemote = withBusy(loadRemote);
 
@@ -264,201 +263,72 @@ function renderAll() {
   renderPriority();
 }
 
-function renderCalendar() {
-  calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
-
-  const week0 = startOfWeek(viewDate);
-  const weekEnd = addDays(week0, 6);
-  weekTitle.textContent = `${toISODate(week0)} ~ ${toISODate(weekEnd)} （周日开始）`;
-
-  calGrid.innerHTML = "";
-
-  calGrid.appendChild(cellH(""));
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(week0, i);
-    const name = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
-    const h = cellH("");
-    const hdr = document.createElement("div");
-    hdr.className = "dayHeader";
-    hdr.innerHTML = `<div class="d1">${name}</div><div class="d2">${toISODate(d)}</div>`;
-
-    const chips = document.createElement("div");
-    chips.className = "dayDeadline";
-    const dayKey = toISODate(d);
-    const deadlines = store.tasks
-      .filter(t => t.type === "deadline" && toISODate(new Date(t.deadlineISO)) === dayKey)
-      .sort((a,b)=>taskTimeKey(a)-taskTimeKey(b))
-      .slice(0, 4);
-    for (const t of deadlines) {
-      const c = document.createElement("span");
-      c.className = "deadChip";
-      c.textContent = t.title.length > 10 ? t.title.slice(0,10)+"…" : t.title;
-      c.title = t.title;
-      c.onclick = () => openEditTask(t.id);
-      chips.appendChild(c);
-    }
-    hdr.appendChild(chips);
-
-    h.appendChild(hdr);
-    calGrid.appendChild(h);
-  }
-
-  const totalMin = (END_HOUR - START_HOUR) * 60;
-  const rows = Math.floor(totalMin / SLOT_MIN);
-  const dayMin0 = START_HOUR * 60;
-
-  for (let r = 0; r < rows; r++) {
-    const tMin = dayMin0 + r * SLOT_MIN;
-    calGrid.appendChild(timeCell(`${pad2(Math.floor(tMin/60))}:${pad2(tMin%60)}`));
-
-    for (let day = 0; day < 7; day++) {
-      const cell = document.createElement("div");
-      cell.className = "slot";
-      cell.dataset.day = String(day);
-      cell.dataset.tmin = String(tMin);
-
-      cell.onclick = () => {
-        const d = addDays(week0, day);
-        d.setHours(0,0,0,0);
-        const start = addMinutes(d, tMin);
-        openCreateScheduled(start);
-      };
-      calGrid.appendChild(cell);
-    }
-  }
-
-  requestAnimationFrame(() => drawOverlaysAndEvents(week0, rows, dayMin0));
+function timeLabel(date) { return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`; }
+function durationLabel(minutes) {
+  const hours = Math.floor(minutes / 60), rest = minutes % 60;
+  return [hours ? `${hours} 小时` : "", rest ? `${rest} 分钟` : ""].filter(Boolean).join(" ");
 }
-
-function drawOverlaysAndEvents(week0, rows, dayMin0) {
-  calGrid.querySelectorAll(".dayOverlay").forEach(n => n.remove());
-
-  const headerCell = calGrid.querySelector(".cellH");
-  const headerH = headerCell ? headerCell.getBoundingClientRect().height : 56;
-
-  const gridRect = calGrid.getBoundingClientRect();
-  const overlayTop = headerH;
-  const overlayHeight = rows * ROW_PX;
-
-  const overlays = [];
-  for (let day = 0; day < 7; day++) {
-    const firstSlot = calGrid.querySelector(`.slot[data-day="${day}"][data-tmin="${dayMin0}"]`);
-    if (!firstSlot) continue;
-
-    const r = firstSlot.getBoundingClientRect();
-    const overlay = document.createElement("div");
-    overlay.className = "dayOverlay";
-    overlay.style.top = `${overlayTop}px`;
-    overlay.style.left = `${r.left - gridRect.left}px`;
-    overlay.style.width = `${r.width}px`;
-    overlay.style.height = `${overlayHeight}px`;
-
-    calGrid.appendChild(overlay);
-    overlays.push({ day, overlay });
-  }
-
-  const weekStartTs = week0.getTime();
-  const weekEndTs = addDays(week0, 7).getTime();
-
-  for (const { day, overlay } of overlays) {
-    const dayDate = addDays(week0, day);
-    const dayKey = toISODate(dayDate);
-
-    const events = store.tasks
-      .filter(t => t.type === "scheduled")
-      .map(t => {
-        const st = new Date(t.startISO);
-        const startMin = minutesOfDay(st);
-        const endMin = startMin + (t.durationMin || 60);
-        return { task: t, st, startMin, endMin };
-      })
-      .filter(x => {
-        const ts = x.st.getTime();
-        return ts >= weekStartTs && ts < weekEndTs && toISODate(x.st) === dayKey;
-      })
-      .filter(x => x.endMin > dayMin0 && x.startMin < END_HOUR*60)
-      .sort((a,b) => (a.startMin - b.startMin) || (a.endMin - b.endMin));
-
-    const laid = layoutDayEvents(events);
-
-    for (const e of laid) {
-      const t = e.task;
-
-      const topMin = Math.max(e.startMin, dayMin0);
-      const botMin = Math.min(e.endMin, END_HOUR * 60);
-
-      const top = ((topMin - dayMin0) / SLOT_MIN) * ROW_PX + 3;
-      const height = Math.max(18, ((botMin - topMin) / SLOT_MIN) * ROW_PX - 6);
-
-      const gap = 6;
-      const W = overlay.clientWidth;
-      const cols = Math.max(1, e.cols);
-
-      const usable = Math.max(0, W - gap * (cols + 1));
-      const colW = usable / cols;
-
-      const left = gap + e.col * (colW + gap);
-      const right = gap + (cols - 1 - e.col) * (colW + gap);
-
-      const node = document.createElement("div");
-      node.className = "event";
-      node.style.top = `${Math.round(top)}px`;
-      node.style.height = `${Math.round(height)}px`;
-      node.style.left = `${Math.round(left)}px`;
-      node.style.right = `${Math.round(right)}px`;
-      node.style.width = "auto";
-
-      const st = new Date(t.startISO);
-      node.innerHTML = `<div class="t">${escapeHTML(t.title)}</div>
-                        <div class="s">${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${(t.durationMin||60)}m</div>`;
-
-      node.onclick = (evt) => {
-        evt.stopPropagation();
-        if (evt.shiftKey) openCreateScheduled(new Date(t.startISO));
-        else openEditTask(t.id);
-      };
-
-      overlay.appendChild(node);
+function defaultStart(date) {
+  const start = new Date(date);
+  start.setHours(9, 0, 0, 0);
+  const now = new Date();
+  if (toISODate(start) === toISODate(now)) start.setHours(Math.min(now.getHours() + 1, 23), 0, 0, 0);
+  return start;
+}
+function renderCalendar() {
+  const week0 = startOfWeek(viewDate), weekEnd = addDays(week0, 6);
+  const today = toISODate(new Date());
+  const dayNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const shortDate = d => `${d.getMonth() + 1}月${d.getDate()}日`;
+  weekTitle.textContent = `${shortDate(week0)} — ${shortDate(weekEnd)}`;
+  document.getElementById("monthTitle").textContent = `${viewDate.getFullYear()} · WEEKLY PLANNER`;
+  document.getElementById("monthHeading").textContent = `${viewDate.getMonth() + 1}月`;
+  const weekTasks = store.tasks.filter(t => {
+    const date = new Date(t.type === "scheduled" ? t.startISO : t.deadlineISO);
+    return date >= week0 && date < addDays(week0, 7);
+  });
+  document.getElementById("weekCount").textContent = `${weekTasks.length} 项安排`;
+  calGrid.replaceChildren();
+  for (let i = 0; i < 7; i++) {
+    const date = addDays(week0, i), dateKey = toISODate(date), isToday = dateKey === today;
+    const dayTasks = weekTasks.filter(t => toISODate(new Date(t.type === "scheduled" ? t.startISO : t.deadlineISO)) === dateKey).sort((a,b) => taskTimeKey(a) - taskTimeKey(b));
+    const row = document.createElement("section");
+    row.className = `day-row${isToday ? " is-today" : ""}${dayTasks.length ? "" : " is-empty"}`;
+    row.setAttribute("aria-label", `${shortDate(date)} ${dayNames[i]}`);
+    if (isToday) row.setAttribute("aria-current", "date");
+    const label = document.createElement("div");
+    label.className = "day-label";
+    label.innerHTML = `<div class="weekday">${dayNames[i]}${isToday ? '<span class="today-label">今天</span>' : ""}</div><div class="day-number">${pad2(date.getDate())}<span class="day-month">${date.getMonth()+1}月</span></div>`;
+    const content = document.createElement("div");
+    content.className = "day-content";
+    if (!dayTasks.length) {
+      const empty = document.createElement("span");
+      empty.className = "empty-day";
+      empty.textContent = "暂无安排";
+      content.appendChild(empty);
     }
-  }
-
-  function layoutDayEvents(events) {
-    const n = events.length;
-    if (n === 0) return [];
-
-    const parent = Array.from({length:n}, (_,i)=>i);
-    const find = (x)=> (parent[x]===x?x:(parent[x]=find(parent[x])));
-    const uni = (a,b)=>{ a=find(a); b=find(b); if(a!==b) parent[b]=a; };
-
-    const colEnds = [];
-    const colOf = Array(n).fill(0);
-    const active = [];
-
-    for (let i=0;i<n;i++) {
-      const cur = events[i];
-
-      for (let k=active.length-1;k>=0;k--) {
-        if (active[k].endMin <= cur.startMin) active.splice(k,1);
-      }
-      for (const a of active) uni(a.idx, i);
-
-      let col = 0;
-      while (col < colEnds.length && colEnds[col] > cur.startMin) col++;
-      if (col === colEnds.length) colEnds.push(cur.endMin);
-      else colEnds[col] = cur.endMin;
-
-      colOf[i] = col;
-      active.push({ idx: i, endMin: cur.endMin });
+    for (const task of dayTasks) {
+      const deadline = task.type === "deadline";
+      const start = new Date(deadline ? task.deadlineISO : task.startISO);
+      const end = addMinutes(start, task.durationMin || 60);
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = `task-card${deadline ? " deadline" : ""}${deadline && start < new Date() ? " overdue" : ""}`;
+      const time = deadline ? `截止 · ${timeLabel(start)}` : `${timeLabel(start)} — ${timeLabel(end)}${toISODate(end) !== toISODate(start) ? ' +' + Math.round((new Date(toISODate(end)) - new Date(toISODate(start))) / 86400000) + '天' : ''}`;
+      card.innerHTML = `<span class="task-time">${deadline ? '<svg aria-hidden="true"><use href="#i-flag"/></svg>' : ''}${escapeHTML(time)}${deadline ? '' : `<span class="task-duration">${durationLabel(task.durationMin || 60)}</span>`}</span><span class="task-name">${escapeHTML(task.title)}</span>`;
+      card.setAttribute("aria-label", `${task.title}，${time}，编辑任务`);
+      card.onclick = () => openEditTask(task.id);
+      content.appendChild(card);
     }
-
-    const maxCol = new Map();
-    for (let i=0;i<n;i++) {
-      const root = find(i);
-      const c = colOf[i] + 1;
-      maxCol.set(root, Math.max(maxCol.get(root)||0, c));
-    }
-
-    return events.map((ev,i)=>({ ...ev, col: colOf[i], cols: maxCol.get(find(i)) || 1 }));
+    const add = document.createElement("button");
+    add.className = "add-day";
+    add.type = "button";
+    add.title = `${shortDate(date)}添加任务`;
+    add.setAttribute("aria-label", add.title);
+    add.innerHTML = '<svg aria-hidden="true"><use href="#i-plus"/></svg>';
+    add.onclick = () => openCreateScheduled(defaultStart(date));
+    row.append(label, content, add);
+    calGrid.appendChild(row);
   }
 }
 
@@ -466,6 +336,10 @@ function renderPriority() {
   ensurePriorityComplete();
   const byId = new Map(store.tasks.map(t => [t.id, t]));
   priorityList.innerHTML = "";
+  document.getElementById("priorityCount").textContent = store.tasks.length;
+  if (!store.tasks.length) {
+    priorityList.innerHTML = '<li class="priority-empty"><span class="empty-icon"><svg aria-hidden="true"><use href="#i-flag"/></svg></span>还没有任务</li>';
+  }
 
   for (const id of store.priority) {
     const t = byId.get(id);
@@ -476,17 +350,33 @@ function renderPriority() {
     li.draggable = true;
     li.dataset.id = id;
 
-    const badge = (t.type === "deadline") ? deadlineBadge(t.deadlineISO) : { text: "CAL", cls: "badge" };
-    li.innerHTML = `
-      <div class="pt">
-        <div class="name">${escapeHTML(t.title)}</div>
-        <span class="${badge.cls}">${badge.text}</span>
-      </div>
-      <div class="meta">${escapeHTML(taskMeta(t))}</div>
-    `;
-    li.onclick = () => openEditTask(id);
-
+    const badge = (t.type === "deadline") ? deadlineBadge(t.deadlineISO) : { text: "日程", cls: "badge" };
+    li.innerHTML = `<span class="drag-handle" aria-hidden="true">⠿</span><button type="button" class="priority-task"><span class="pt"><span class="name">${escapeHTML(t.title)}</span><span class="${badge.cls}">${badge.text}</span></span><span class="meta">${escapeHTML(taskMeta(t))}</span></button>`;
+    li.querySelector("button").onclick = () => openEditTask(id);
+    const order = document.createElement("span");
+    order.className = "priority-order";
+    for (const [step, symbol, label] of [[-1, "↑", "提高优先级"], [1, "↓", "降低优先级"]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = symbol;
+      button.title = label;
+      button.setAttribute("aria-label", `${taskTitleForLabel(t)}：${label}`);
+      const index = store.priority.indexOf(id);
+      button.disabled = index + step < 0 || index + step >= store.priority.length;
+      button.onclick = withBusy(async () => {
+        const currentIndex = store.priority.indexOf(id), targetIndex = currentIndex + step;
+        if (targetIndex < 0 || targetIndex >= store.priority.length) return;
+        [store.priority[currentIndex], store.priority[targetIndex]] = [store.priority[targetIndex], store.priority[currentIndex]];
+        await persist();
+        renderPriority();
+      });
+      order.appendChild(button);
+    }
+    li.appendChild(order);
+    li.title = "拖动调整优先级";
+    li.addEventListener("dragend", () => li.classList.remove("dragging"));
     li.addEventListener("dragstart", (e) => {
+      li.classList.add("dragging");
       e.dataTransfer.setData("text/plain", id);
       e.dataTransfer.effectAllowed = "move";
     });
@@ -516,38 +406,25 @@ function reorderPriority(fromId, toId) {
 }
 
 function taskMeta(t) {
-  if (t.type === "scheduled") {
-    const st = new Date(t.startISO);
-    return `${toISODate(st)} ${pad2(st.getHours())}:${pad2(st.getMinutes())} · ${t.durationMin || 60}m`;
-  }
-  if (t.type === "deadline") {
-    const dl = new Date(t.deadlineISO);
-    return `Deadline: ${toISODate(dl)} ${pad2(dl.getHours())}:${pad2(dl.getMinutes())}`;
-  }
-  return "";
+  const date = new Date(t.type === "scheduled" ? t.startISO : t.deadlineISO);
+  return `${date.getMonth()+1}月${date.getDate()}日 · ${timeLabel(date)}`;
 }
-
-function cellH(text) {
-  const d = document.createElement("div");
-  d.className = "cellH";
-  d.textContent = text;
-  return d;
-}
-function timeCell(text) {
-  const d = document.createElement("div");
-  d.className = "timeCell";
-  d.textContent = text;
-  return d;
-}
+function taskTitleForLabel(task) { return task.title || "任务"; }
 
 // ---------- modal ----------
+let modalReturnFocus;
 function openModal() {
+  modalReturnFocus = document.activeElement;
   modalOverlay.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
   setModalMsg("");
+  taskTitleInput.focus();
 }
 function closeModal() {
   modalOverlay.classList.add("hidden");
   editingTaskId = null;
+  document.body.style.overflow = "";
+  modalReturnFocus?.focus();
 }
 function applyModalMode(isDeadline) {
   deadlineFields.classList.toggle("hidden", !isDeadline);
@@ -557,7 +434,7 @@ function applyModalMode(isDeadline) {
 function openCreateScheduled(startDate) {
   if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
-  modalTitle.textContent = "新建日历任务";
+  modalTitle.textContent = "新建任务";
   modalDeleteBtn.classList.add("hidden");
 
   taskTitleInput.value = "";
@@ -565,14 +442,14 @@ function openCreateScheduled(startDate) {
   applyModalMode(false);
 
   taskStartInput.value = toLocalDTInputValue(startDate);
-  taskDurInput.value = "120";
+  taskDurInput.value = "60";
   taskDeadlineInput.value = "";
   openModal();
 }
 function openCreateDeadline(defaultDay = new Date()) {
   if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
-  modalTitle.textContent = "新建 Deadline 任务";
+  modalTitle.textContent = "添加截止事项";
   modalDeleteBtn.classList.add("hidden");
 
   taskTitleInput.value = "";
@@ -613,6 +490,14 @@ function openEditTask(id) {
 
 taskIsDeadline.addEventListener("change", () => applyModalMode(taskIsDeadline.checked));
 modalCloseBtn.onclick = closeModal;
+modalOverlay.addEventListener("keydown", event => {
+  if (event.key === "Escape") { closeModal(); return; }
+  if (event.key !== "Tab") return;
+  const fields = [...modalOverlay.querySelectorAll("button, input")].filter(el => el.getClientRects().length && !el.disabled);
+  const first = fields[0], last = fields.at(-1);
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+});
 modalOverlay.addEventListener("click", (e) => { if (e.target === modalOverlay) closeModal(); });
 
 modalSaveBtn.addEventListener("click", withBusy(async () => {
@@ -626,7 +511,7 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
     if (!editingTaskId) {
       if (isDeadline) {
         const dl = fromLocalDTInputValue(taskDeadlineInput.value);
-        if (!dl) { setModalMsg("请选择 deadline 时间。"); return; }
+        if (!dl) { setModalMsg("请选择截止时间。"); return; }
         const t = { id: uid(), type: "deadline", title, deadlineISO: dl.toISOString(), updatedAt: now };
         store.tasks.push(t);
         insertByTimeDefault(t);
@@ -646,7 +531,7 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
 
       if (isDeadline) {
         const dl = fromLocalDTInputValue(taskDeadlineInput.value);
-        if (!dl) { setModalMsg("请选择 deadline 时间。"); return; }
+        if (!dl) { setModalMsg("请选择截止时间。"); return; }
         store.tasks[idx] = { id: old.id, type: "deadline", title, deadlineISO: dl.toISOString(), updatedAt: now };
       } else {
         const st = fromLocalDTInputValue(taskStartInput.value);
@@ -683,12 +568,16 @@ todayBtn.onclick = () => { viewDate = new Date(); renderCalendar(); };
 
 // ---------- sidebar actions ----------
 newDeadlineBtn.onclick = () => openCreateDeadline(viewDate);
+document.getElementById("newTaskBtn").onclick = () => {
+  const week0 = startOfWeek(viewDate), now = new Date();
+  openCreateScheduled(defaultStart(now >= week0 && now < addDays(week0, 7) ? now : week0));
+};
 syncBtn.addEventListener("click", syncFromRemote);
 
 document.getElementById("copyLinkBtn").onclick = async () => {
   try {
     await navigator.clipboard.writeText(location.href);
-    setAppMsg("同步链接已复制，请在手机或电脑上打开；仅分享给可信的人。");
+    setAppMsg("链接已复制");
   } catch {
     setAppMsg("请复制浏览器地址栏中的完整链接（包含 # 后面的内容）。");
   }
@@ -713,7 +602,6 @@ document.getElementById("copyLinkBtn").onclick = async () => {
   } catch (error) {
     setAppMsg(String(error.message || error));
   }
-  window.addEventListener("resize", renderCalendar);
   const refresh = () => {
     if (calendarKey && document.visibilityState === "visible" && modalOverlay.classList.contains("hidden")) syncFromRemote();
   };
