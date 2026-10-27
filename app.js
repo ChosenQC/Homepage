@@ -268,6 +268,31 @@ function durationLabel(minutes) {
   const hours = Math.floor(minutes / 60), rest = minutes % 60;
   return [hours ? `${hours} 小时` : "", rest ? `${rest} 分钟` : ""].filter(Boolean).join(" ");
 }
+function completionControl(task) {
+  const label = document.createElement("label");
+  label.className = "completion-control";
+  label.title = task.completed ? "标记为未完成" : "标记为已完成";
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = !!task.completed;
+  checkbox.setAttribute("aria-label", `${task.title}：${task.completed ? "已完成，取消勾选可恢复" : "标记完成"}`);
+  checkbox.addEventListener("change", () => {
+    if (busy) { checkbox.checked = !!task.completed; return; }
+    const complete = checkbox.checked;
+    withBusy(async () => {
+      checkbox.disabled = true;
+      task.completed = complete;
+      task.updatedAt = Date.now();
+      await persist();
+      renderAll();
+      const sameTask = [...document.querySelectorAll(".completion-control input")].find(input => input.dataset.taskId === task.id);
+      sameTask?.focus({ preventScroll: true });
+    })();
+  });
+  checkbox.dataset.taskId = task.id;
+  label.appendChild(checkbox);
+  return label;
+}
 function defaultStart(date) {
   const start = new Date(date);
   start.setHours(9, 0, 0, 0);
@@ -287,7 +312,8 @@ function renderCalendar() {
     const date = new Date(t.type === "scheduled" ? t.startISO : t.deadlineISO);
     return date >= week0 && date < addDays(week0, 7);
   });
-  document.getElementById("weekCount").textContent = `${weekTasks.length} 项安排`;
+  const completedCount = weekTasks.filter(task => task.completed).length;
+  document.getElementById("weekCount").textContent = `${weekTasks.length} 项安排${completedCount ? ` · ${completedCount} 已完成` : ""}`;
   calGrid.replaceChildren();
   for (let i = 0; i < 7; i++) {
     const date = addDays(week0, i), dateKey = toISODate(date), isToday = dateKey === today;
@@ -311,13 +337,16 @@ function renderCalendar() {
       const deadline = task.type === "deadline";
       const start = new Date(deadline ? task.deadlineISO : task.startISO);
       const end = addMinutes(start, task.durationMin || 60);
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = `task-card${deadline ? " deadline" : ""}${deadline && start < new Date() ? " overdue" : ""}`;
+      const card = document.createElement("article");
+      card.className = `task-card${deadline ? " deadline" : ""}${deadline && !task.completed && start < new Date() ? " overdue" : ""}${task.completed ? " is-complete" : ""}`;
+      const details = document.createElement("button");
+      details.type = "button";
+      details.className = "task-details";
       const time = deadline ? `截止 · ${timeLabel(start)}` : `${timeLabel(start)} — ${timeLabel(end)}${toISODate(end) !== toISODate(start) ? ' +' + Math.round((new Date(toISODate(end)) - new Date(toISODate(start))) / 86400000) + '天' : ''}`;
-      card.innerHTML = `<span class="task-time">${deadline ? '<svg aria-hidden="true"><use href="#i-flag"/></svg>' : ''}${escapeHTML(time)}${deadline ? '' : `<span class="task-duration">${durationLabel(task.durationMin || 60)}</span>`}</span><span class="task-name">${escapeHTML(task.title)}</span>`;
-      card.setAttribute("aria-label", `${task.title}，${time}，编辑任务`);
-      card.onclick = () => openEditTask(task.id);
+      details.innerHTML = `<span class="task-time">${deadline ? '<svg aria-hidden="true"><use href="#i-flag"/></svg>' : ''}${escapeHTML(time)}${task.completed ? '<span class="completed-label">已完成</span>' : deadline ? '' : `<span class="task-duration">${durationLabel(task.durationMin || 60)}</span>`}</span><span class="task-name">${escapeHTML(task.title)}</span>`;
+      details.setAttribute("aria-label", `${task.title}，${time}${task.completed ? "，已完成" : ""}，编辑任务`);
+      details.onclick = () => openEditTask(task.id);
+      card.append(completionControl(task), details);
       content.appendChild(card);
     }
     const add = document.createElement("button");
@@ -346,13 +375,14 @@ function renderPriority() {
     if (!t) continue;
 
     const li = document.createElement("li");
-    li.className = "pitem";
+    li.className = `pitem${t.completed ? " is-complete" : ""}`;
     li.draggable = true;
     li.dataset.id = id;
 
-    const badge = (t.type === "deadline") ? deadlineBadge(t.deadlineISO) : { text: "日程", cls: "badge" };
+    const badge = t.completed ? { text: "已完成", cls: "badge completed-badge" } : (t.type === "deadline") ? deadlineBadge(t.deadlineISO) : { text: "日程", cls: "badge" };
     li.innerHTML = `<span class="drag-handle" aria-hidden="true">⠿</span><button type="button" class="priority-task"><span class="pt"><span class="name">${escapeHTML(t.title)}</span><span class="${badge.cls}">${badge.text}</span></span><span class="meta">${escapeHTML(taskMeta(t))}</span></button>`;
     li.querySelector("button").onclick = () => openEditTask(id);
+    li.querySelector(".drag-handle").after(completionControl(t));
     const order = document.createElement("span");
     order.className = "priority-order";
     for (const [step, symbol, label] of [[-1, "↑", "提高优先级"], [1, "↓", "降低优先级"]]) {
@@ -532,13 +562,13 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
       if (isDeadline) {
         const dl = fromLocalDTInputValue(taskDeadlineInput.value);
         if (!dl) { setModalMsg("请选择截止时间。"); return; }
-        store.tasks[idx] = { id: old.id, type: "deadline", title, deadlineISO: dl.toISOString(), updatedAt: now };
+        store.tasks[idx] = { id: old.id, completed: !!old.completed, type: "deadline", title, deadlineISO: dl.toISOString(), updatedAt: now };
       } else {
         const st = fromLocalDTInputValue(taskStartInput.value);
         const dur = parseInt(taskDurInput.value || "60", 10);
         if (!st) { setModalMsg("请选择开始时间。"); return; }
         if (!dur || dur < 15) { setModalMsg("时长至少 15 分钟。"); return; }
-        store.tasks[idx] = { id: old.id, type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, updatedAt: now };
+        store.tasks[idx] = { id: old.id, completed: !!old.completed, type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, updatedAt: now };
       }
     }
 
