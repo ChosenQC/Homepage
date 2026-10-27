@@ -11,14 +11,23 @@ export function occursOn(task, dateKey) {
 export function expandTasks(tasks, start, end) {
   const result = tasks.filter(task => !task.recurrence && new Date(task.type === 'scheduled' ? task.startISO : task.deadlineISO) >= start && new Date(task.type === 'scheduled' ? task.startISO : task.deadlineISO) < end);
   for (const task of tasks.filter(task => task.recurrence)) {
+    const dates = new Set(Object.keys(task.overrides || {}));
     for (const day = new Date(start); day < end; day.setDate(day.getDate()+1)) {
-      const dateKey = localDateKey(day);
-      if (!occursOn(task, dateKey)) continue;
-      const date = new Date(`${dateKey}T${task.recurrence.time}`);
-      result.push({ ...task, id: `${task.id}@${dateKey}`, sourceId: task.id, occurrenceDate: dateKey, startISO: date.toISOString(), completed: !!task.completionDates?.[dateKey] });
+      dates.add(localDateKey(day));
+    }
+    for (const dateKey of [...dates].sort()) {
+      const occurrence = occurrenceFor(task, dateKey);
+      if (occurrence && new Date(occurrence.startISO) >= start && new Date(occurrence.startISO) < end) result.push(occurrence);
     }
   }
   return result;
+}
+export function occurrenceFor(task, dateKey) {
+  if (!occursOn(task, dateKey)) return null;
+  const override = task.overrides?.[dateKey];
+  const date = new Date(override?.startLocal || `${dateKey}T${task.recurrence.time}`);
+  if (!Number.isFinite(date.getTime())) return null;
+  return { ...task, title: override?.title ?? task.title, durationMin: override?.durationMin ?? task.durationMin, id: `${task.id}@${dateKey}`, sourceId: task.id, occurrenceDate: dateKey, startISO: date.toISOString(), completed: !!task.completionDates?.[dateKey], isOverride: !!override };
 }
 export function repeatLabel(rule) {
   if (!rule) return '';

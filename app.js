@@ -1,4 +1,4 @@
-import { expandTasks, repeatLabel } from './recurrence.mjs?v=20261027-repeat-1';
+import { expandTasks, repeatLabel, occurrenceFor } from './recurrence.mjs?v=20261027-custom-1';
 // Calendar config
 const WEEK_START = 0;        // 0=Sunday
 
@@ -200,7 +200,7 @@ function normalizeStore(raw) {
   }
 
   if (typeof raw === "object" && raw.version === 2 && Array.isArray(raw.tasks) && Array.isArray(raw.priority)) {
-    return { version: 2, tasks: raw.tasks, priority: raw.priority };
+    return { version: 2, tasks: raw.tasks, priority: raw.priority, shortcuts: Array.isArray(raw.shortcuts) ? raw.shortcuts.filter(item=>item && typeof item.id === "string" && typeof item.title === "string") : [] };
   }
 
   return { version: 2, tasks: [], priority: [] };
@@ -264,6 +264,7 @@ const syncFromRemote = withBusy(loadRemote);
 function renderAll() {
   renderCalendar();
   renderPriority();
+  renderCustomShortcuts();
 }
 
 function timeLabel(date) { return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`; }
@@ -349,7 +350,7 @@ function renderCalendar() {
       details.type = "button";
       details.className = "task-details";
       const time = deadline ? `截止 · ${timeLabel(start)}` : `${timeLabel(start)} — ${timeLabel(end)}${toISODate(end) !== toISODate(start) ? ' +' + Math.round((new Date(toISODate(end)) - new Date(toISODate(start))) / 86400000) + '天' : ''}`;
-      details.innerHTML = `<span class="task-time">${deadline ? '<svg aria-hidden="true"><use href="#i-flag"/></svg>' : ''}${escapeHTML(time)}${task.completed ? '<span class="completed-label">已完成</span>' : task.recurrence ? '<span class="task-duration">↻ ' + escapeHTML(repeatLabel(task.recurrence)) + '</span>' : deadline ? '' : `<span class="task-duration">${durationLabel(task.durationMin || 60)}</span>`}</span><span class="task-name">${escapeHTML(task.title)}</span>`;
+      details.innerHTML = `<span class="task-time">${deadline ? '<svg aria-hidden="true"><use href="#i-flag"/></svg>' : ''}${escapeHTML(time)}${task.completed ? '<span class="completed-label">已完成</span>' : task.isOverride ? '<span class="task-duration">本次调整</span>' : task.recurrence ? '<span class="task-duration">↻ ' + escapeHTML(repeatLabel(task.recurrence)) + '</span>' : deadline ? '' : `<span class="task-duration">${durationLabel(task.durationMin || 60)}</span>`}</span><span class="task-name">${escapeHTML(task.title)}</span>`;
       details.setAttribute("aria-label", `${task.title}，${time}${task.completed ? "，已完成" : ""}，编辑任务`);
       details.onclick = () => openEditTask(task.sourceId || task.id, task.occurrenceDate);
       card.append(completionControl(task), details);
@@ -448,7 +449,79 @@ function taskMeta(t) {
 }
 function taskTitleForLabel(task) { return task.title || "任务"; }
 
+function renderCustomShortcuts() {
+  const list = document.getElementById("customShortcutList");
+  list.replaceChildren();
+  const shortcuts = store.shortcuts || [];
+  if (!shortcuts.length) {
+    const hint = document.createElement("span");
+    hint.className = "shortcut-empty";
+    hint.textContent = "填写任务后，可把当前设置存成快捷任务";
+    list.appendChild(hint);
+  }
+  for (const shortcut of shortcuts) {
+    const item = document.createElement("span");
+    item.className = "custom-shortcut-item";
+    const apply = document.createElement("button");
+    apply.type = "button";
+    apply.className = "preset-chip";
+    apply.textContent = shortcut.title;
+    apply.title = `${shortcut.startTime || ""} · ${shortcut.durationMin || 60} 分钟${shortcut.recurrence ? " · " + repeatLabel(shortcut.recurrence) : ""}`;
+    apply.setAttribute("aria-label", `使用快捷任务：${shortcut.title}`);
+    apply.disabled = isOccurrenceEdit() && shortcut.type === "deadline";
+    apply.onclick = () => {
+      taskTitleInput.value = shortcut.title;
+      const date = fromLocalDTInputValue(taskStartInput.value) || fromLocalDTInputValue(taskDeadlineInput.value) || new Date();
+      taskIsDeadline.checked = shortcut.type === "deadline";
+      applyModalMode(taskIsDeadline.checked);
+      const value = `${toISODate(date)}T${shortcut.startTime || "09:00"}`;
+      if (taskIsDeadline.checked) taskDeadlineInput.value = value;
+      else taskStartInput.value = value;
+      taskDurInput.value = String(shortcut.durationMin || 60);
+      if (!isOccurrenceEdit()) setRepeatRule(shortcut.recurrence);
+      syncQuickChoices();
+    };
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-shortcut";
+    remove.textContent = "×";
+    remove.title = "删除快捷任务，不影响已有日程";
+    remove.setAttribute("aria-label", `删除快捷任务：${shortcut.title}`);
+    remove.onclick = withBusy(async () => {
+      store.shortcuts = (store.shortcuts || []).filter(item=>item.id !== shortcut.id);
+      await persist();
+      renderCustomShortcuts();
+      syncQuickChoices();
+      document.getElementById("shortcutFeedback").textContent = "快捷任务已删除，已有日程不受影响。";
+    });
+    item.append(apply, remove);
+    list.appendChild(item);
+  }
+}
+
 // ---------- modal ----------
+const editScope = document.getElementById("editScope");
+function isOccurrenceEdit() { return !!editingOccurrenceDate && editScope.value === "occurrence"; }
+document.getElementById("saveShortcutBtn").onclick = withBusy(async () => {
+  if (!loaded) throw new Error("请先同步云端，再保存快捷任务。");
+  const title = taskTitleInput.value.trim();
+  if (!title) throw new Error("请先填写快捷任务名称。");
+  const deadline = taskIsDeadline.checked;
+  const start = fromLocalDTInputValue(deadline ? taskDeadlineInput.value : taskStartInput.value);
+  const duration = Number(taskDurInput.value);
+  if (!start) throw new Error("请选择快捷任务的默认时间。");
+  if (!deadline && (!Number.isFinite(duration) || duration < 15)) throw new Error("时长至少 15 分钟。");
+  const rule = isOccurrenceEdit() ? null : readRepeatRule(start);
+  store.shortcuts ||= [];
+  const existing = store.shortcuts.find(item=>item.title === title);
+  const shortcut = { id: existing?.id || uid(), title, type: deadline ? "deadline" : "scheduled", durationMin: Math.round((duration || 60)/15)*15, startTime: timeLabel(start), recurrence: rule ? { frequency: rule.frequency, weekdays: rule.weekdays } : null };
+  if (existing) store.shortcuts[store.shortcuts.indexOf(existing)] = shortcut;
+  else store.shortcuts.push(shortcut);
+  await persist();
+  renderCustomShortcuts();
+  syncQuickChoices();
+  document.getElementById("shortcutFeedback").textContent = "已保存为快捷任务，同一日历的其他设备也能使用。";
+});
 const repeatFrequency = document.getElementById("repeatFrequency");
 const repeatUntil = document.getElementById("repeatUntil");
 const weekdayInputs = [...document.querySelectorAll("#repeatWeekdays input")];
@@ -483,6 +556,7 @@ const quickDurationButtons = [...document.querySelectorAll("[data-duration]")];
 function syncQuickChoices() {
   for (const button of quickTaskButtons) button.setAttribute("aria-pressed", String(button.dataset.taskTitle === taskTitleInput.value.trim()));
   for (const button of quickDurationButtons) button.setAttribute("aria-pressed", String(Number(button.dataset.duration) === Number(taskDurInput.value)));
+  document.getElementById("saveShortcutBtn").textContent = (store.shortcuts || []).some(item=>item.title === taskTitleInput.value.trim()) ? "更新同名快捷任务" : "＋ 存为快捷任务";
 }
 for (const button of quickTaskButtons) {
   button.onclick = () => {
@@ -504,6 +578,8 @@ function openModal() {
   modalOverlay.classList.remove("hidden");
   document.body.style.overflow = "hidden";
   setModalMsg("");
+  document.getElementById("shortcutFeedback").textContent = "";
+  renderCustomShortcuts();
   syncQuickChoices();
   taskTitleInput.focus();
 }
@@ -517,13 +593,17 @@ function closeModal() {
 function applyModalMode(isDeadline) {
   deadlineFields.classList.toggle("hidden", !isDeadline);
   scheduledFields.classList.toggle("hidden", isDeadline);
-  document.getElementById("repeatFields").classList.toggle("hidden", isDeadline);
+  document.getElementById("repeatFields").classList.toggle("hidden", isDeadline || isOccurrenceEdit());
 }
 
 function openCreateScheduled(startDate) {
   if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
   editingOccurrenceDate = null;
+  document.getElementById("editScopeFields").classList.add("hidden");
+  document.getElementById("scopeEditNote").classList.add("hidden");
+  document.getElementById("resetOccurrenceBtn").classList.add("hidden");
+  taskIsDeadline.disabled = false;
   setRepeatRule();
   document.getElementById("repeatEditNote").classList.add("hidden");
   document.getElementById("skipOccurrenceBtn").classList.add("hidden");
@@ -543,6 +623,10 @@ function openCreateDeadline(defaultDay = new Date()) {
   if (!loaded) { setAppMsg("请先同步云端任务，再新建任务。"); return; }
   editingTaskId = null;
   editingOccurrenceDate = null;
+  document.getElementById("editScopeFields").classList.add("hidden");
+  document.getElementById("scopeEditNote").classList.add("hidden");
+  document.getElementById("resetOccurrenceBtn").classList.add("hidden");
+  taskIsDeadline.disabled = false;
   setRepeatRule();
   document.getElementById("repeatEditNote").classList.add("hidden");
   document.getElementById("skipOccurrenceBtn").classList.add("hidden");
@@ -566,20 +650,34 @@ function openEditTask(id, occurrenceDate = null) {
 
   editingTaskId = id;
   editingOccurrenceDate = occurrenceDate;
-  setRepeatRule(t.recurrence);
-  document.getElementById("repeatEditNote").classList.toggle("hidden", !t.recurrence);
-  document.getElementById("skipOccurrenceBtn").classList.toggle("hidden", !t.recurrence || !occurrenceDate);
-  modalTitle.textContent = t.recurrence ? "编辑重复任务" : "编辑任务";
-  modalDeleteBtn.textContent = t.recurrence ? "删除整组" : "删除任务";
+  editScope.value = occurrenceDate && t.recurrence ? "occurrence" : "series";
+  document.getElementById("editScopeFields").classList.toggle("hidden", !occurrenceDate || !t.recurrence);
+  fillEditFields();
   modalDeleteBtn.classList.remove("hidden");
-
+  openModal();
+}
+function fillEditFields() {
+  const source = store.tasks.find(task=>task.id === editingTaskId);
+  if (!source) return;
+  const single = isOccurrenceEdit();
+  const t = single ? occurrenceFor(source, editingOccurrenceDate) : source;
+  if (!t) return;
+  setRepeatRule(single ? null : source.recurrence);
+  document.getElementById("repeatEditNote").classList.add("hidden");
+  const note = document.getElementById("scopeEditNote");
+  note.classList.toggle("hidden", !source.recurrence);
+  note.textContent = single ? "仅修改这一次的名称、日期、时间和时长，其他安排保持不变。" : "修改将应用到整组任务，已单独调整的日期保留原设置。";
+  document.getElementById("skipOccurrenceBtn").classList.toggle("hidden", single || !source.recurrence || !editingOccurrenceDate);
+  document.getElementById("resetOccurrenceBtn").classList.toggle("hidden", !single || !source.overrides?.[editingOccurrenceDate]);
+  modalTitle.textContent = single ? "调整本次任务" : source.recurrence ? "编辑重复任务" : "编辑任务";
+  modalDeleteBtn.textContent = single ? "删除本次" : source.recurrence ? "删除整组" : "删除任务";
   taskTitleInput.value = t.title || "";
-  const isDeadline = t.type === "deadline";
+  const isDeadline = source.type === "deadline";
   taskIsDeadline.checked = isDeadline;
+  taskIsDeadline.disabled = single;
   applyModalMode(isDeadline);
-
   if (t.type === "scheduled") {
-    taskStartInput.value = t.recurrence ? `${t.recurrence.startDate}T${t.recurrence.time}` : toLocalDTInputValue(new Date(t.startISO));
+    taskStartInput.value = source.recurrence && !single ? `${source.recurrence.startDate}T${source.recurrence.time}` : toLocalDTInputValue(new Date(t.startISO));
     taskDurInput.value = String(t.durationMin || 60);
     taskDeadlineInput.value = "";
   } else {
@@ -587,8 +685,8 @@ function openEditTask(id, occurrenceDate = null) {
     taskStartInput.value = "";
     taskDurInput.value = "60";
   }
-  openModal();
 }
+editScope.onchange = () => { fillEditFields(); syncQuickChoices(); renderCustomShortcuts(); };
 
 taskIsDeadline.addEventListener("change", () => applyModalMode(taskIsDeadline.checked));
 modalCloseBtn.onclick = closeModal;
@@ -609,6 +707,23 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
 
     const isDeadline = !!taskIsDeadline.checked;
     const now = Date.now();
+
+    if (isOccurrenceEdit()) {
+      const source = store.tasks.find(task=>task.id === editingTaskId);
+      const start = fromLocalDTInputValue(taskStartInput.value);
+      const duration = Number(taskDurInput.value);
+      if (!source?.recurrence || !editingOccurrenceDate) throw new Error("找不到本次重复任务。");
+      if (!start) throw new Error("请选择本次任务的开始时间。");
+      if (!Number.isFinite(duration) || duration < 15) throw new Error("时长至少 15 分钟。");
+      source.overrides ||= {};
+      source.overrides[editingOccurrenceDate] = { title, startLocal: toLocalDTInputValue(start), durationMin: Math.round(duration/15)*15, updatedAt: now };
+      source.updatedAt = now;
+      await persist();
+      viewDate = start;
+      closeModal();
+      renderAll();
+      return;
+    }
 
     if (!editingTaskId) {
       if (isDeadline) {
@@ -641,7 +756,7 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
         if (!st) { setModalMsg("请选择开始时间。"); return; }
         if (!dur || dur < 15) { setModalMsg("时长至少 15 分钟。"); return; }
         const recurrence = readRepeatRule(st);
-        store.tasks[idx] = { id: old.id, completed: recurrence ? false : !!old.completed, type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, recurrence, completionDates: old.completionDates || {}, skippedDates: old.skippedDates || {}, updatedAt: now };
+        store.tasks[idx] = { id: old.id, completed: recurrence ? false : !!old.completed, type: "scheduled", title, startISO: st.toISOString(), durationMin: Math.round(dur/15)*15, recurrence, completionDates: old.completionDates || {}, skippedDates: old.skippedDates || {}, overrides: old.overrides || {}, updatedAt: now };
       }
     }
 
@@ -656,6 +771,7 @@ modalSaveBtn.addEventListener("click", withBusy(async () => {
 
 modalDeleteBtn.addEventListener("click", withBusy(async () => {
   if (!editingTaskId) return;
+  if (isOccurrenceEdit()) { await skipCurrentOccurrence(); return; }
   const id = editingTaskId;
   store.tasks = store.tasks.filter(t => t.id !== id);
   store.priority = store.priority.filter(x => x !== id);
@@ -663,13 +779,25 @@ modalDeleteBtn.addEventListener("click", withBusy(async () => {
   closeModal();
   renderAll();
 }));
-document.getElementById("skipOccurrenceBtn").onclick = withBusy(async () => {
+async function skipCurrentOccurrence() {
   const task = store.tasks.find(item=>item.id === editingTaskId);
   if (!task?.recurrence || !editingOccurrenceDate) return;
   task.skippedDates ||= {};
   task.skippedDates[editingOccurrenceDate] = true;
   task.updatedAt = Date.now();
   await persist();
+  closeModal();
+  renderAll();
+}
+document.getElementById("skipOccurrenceBtn").onclick = withBusy(skipCurrentOccurrence);
+document.getElementById("resetOccurrenceBtn").onclick = withBusy(async () => {
+  const source = store.tasks.find(task=>task.id === editingTaskId);
+  if (!source?.overrides?.[editingOccurrenceDate]) return;
+  const originalDate = editingOccurrenceDate;
+  delete source.overrides[originalDate];
+  source.updatedAt = Date.now();
+  await persist();
+  viewDate = new Date(`${originalDate}T12:00:00`);
   closeModal();
   renderAll();
 });
