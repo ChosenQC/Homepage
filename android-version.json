@@ -1,8 +1,8 @@
 {
-  "versionCode": 4,
-  "versionName": "0.3.1",
+  "versionCode": 5,
+  "versionName": "0.3.2",
   "packageName": "com.daybook.faq",
-  "url": "https://chosenqc.github.io/Homepage/faq.apk?v=4",
-  "sha256": "7de814580eb371d3217be717ddbc1614694c60c9bb62bbce4c695506a6a11393",
-  "notes": "日程、健康与 Insight 底部导航；晨间每日最后一条称重趋势；每周锻炼日志和可编辑任务组；多级分类笔记；按手机系统时间每日12点未称重系统提醒，无需手动设置时区。"
+  "url": "https://chosenqc.github.io/Homepage/faq-0.3.2.apk",
+  "sha256": "9b2930d4d7f712cd2e3f1ac2b93164b10cad1ce525c6b9e32d6c2d3adaab0c8f",
+  "notes": "国内网络新增独立后端域名；日程、健康、笔记自动选择可用线路；后台体脂秤上传和午间提醒跟随选通线路；连接失败时可见提示与重试。"
 }
