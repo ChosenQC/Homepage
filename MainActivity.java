@@ -22,7 +22,7 @@ public final class MainActivity extends Activity {
         TextView title=new TextView(this);title.setText("Daybook");title.setTextSize(17);title.setTextColor(Color.rgb(48,65,45));title.setGravity(Gravity.CENTER_VERTICAL);bar.addView(title,new LinearLayout.LayoutParams(0,dp(44),1));
         TextView settings=new TextView(this);settings.setText("设置");settings.setTextSize(13);settings.setTextColor(Color.rgb(91,119,74));settings.setGravity(Gravity.CENTER);settings.setPadding(dp(16),dp(12),dp(16),dp(12));bar.addView(settings);settings.setOnClickListener(v->showSettings());root.addView(bar);
         web=new WebView(this);root.addView(web,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
-        WebSettings ws=web.getSettings();ws.setJavaScriptEnabled(true);ws.setDomStorageEnabled(true);ws.setAllowFileAccess(false);ws.setAllowContentAccess(false);ws.setGeolocationEnabled(false);ws.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);ws.setCacheMode(WebSettings.LOAD_NO_CACHE);ws.setUserAgentString(ws.getUserAgentString()+" DaybookAndroid/0.3.1");
+        WebSettings ws=web.getSettings();ws.setJavaScriptEnabled(true);ws.setDomStorageEnabled(true);ws.setAllowFileAccess(false);ws.setAllowContentAccess(false);ws.setGeolocationEnabled(false);ws.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);ws.setCacheMode(WebSettings.LOAD_NO_CACHE);ws.setUserAgentString(ws.getUserAgentString()+" DaybookAndroid/0.3.2");
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){
                 Uri uri=request.getUrl();if("daybook".equals(uri.getScheme())){if(request.isForMainFrame()&&trusted(view.getUrl()))handleAction(uri);return true;}
@@ -33,7 +33,7 @@ public final class MainActivity extends Activity {
             @Override public void doUpdateVisitedHistory(WebView view,String url,boolean reload){captureBook(url);}
         });
         web.setDownloadListener((url,ua,disposition,mime,length)->{if(trusted(url))try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(Exception ignored){}});
-        web.loadUrl(ScaleStore.SITE+"?app=0.3.1#calendar="+ScaleStore.ensureKey(this)+(getIntent().getBooleanExtra("openHealth",false)?"&tab=health":""));
+        web.loadUrl(ScaleStore.SITE+"?app=0.3.2#calendar="+ScaleStore.ensureKey(this)+(getIntent().getBooleanExtra("openHealth",false)?"&tab=health":""));
     }
     private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
     private boolean trusted(String value){if(value==null)return false;Uri u=Uri.parse(value);return "https".equals(u.getScheme())&&"chosenqc.github.io".equals(u.getHost())&&u.getPath()!=null&&u.getPath().startsWith("/Homepage/");}
@@ -47,6 +47,7 @@ public final class MainActivity extends Activity {
             if(!android.bluetooth.BluetoothAdapter.checkBluetoothAddress(mac)){Toast.makeText(this,"请先踩亮自己的秤，或填写有效地址",Toast.LENGTH_LONG).show();return;}
             new AlertDialog.Builder(this).setTitle("绑定这台体脂秤？").setMessage(mac+"\n确认它是你的秤。绑定后，测量将保存到当前 Book。").setNegativeButton("取消",null).setPositiveButton("确认绑定",(d,w)->{stopCollection();ScaleStore.prefs(this).edit().putString("mac",mac).apply();startCollection();sendState();}).show();
         }
+        else if("api-route".equals(action)){String origin=uri.getQueryParameter("origin");if(ScaleStore.allowedApi(origin)){ScaleStore.prefs(this).edit().putString("apiOrigin",origin).apply();ScaleStore.flush(this);}}
         else if("health-config".equals(action))saveHealthZone(uri.getQueryParameter("timeZone"));
         else if("reminder".equals(action)){saveHealthZone(uri.getQueryParameter("timeZone"));boolean enabled="true".equals(uri.getQueryParameter("enabled"));ScaleStore.prefs(this).edit().putBoolean("noonEnabled",enabled).putString("noonError","").apply();if(enabled)requestNoonPermissions();else NoonReminder.schedule(this);}
         else if("reminder-permission".equals(action)){saveHealthZone(uri.getQueryParameter("timeZone"));requestNoonPermissions();}

@@ -2,6 +2,12 @@
 export const API_ORIGIN = 'https://api.chenqiu.top';
 export const API_ORIGINS = Object.freeze([API_ORIGIN,'https://floral-flower-7c16.chen-qiu.workers.dev']);
 let selectedOrigin = null, selection = null;
+function informNativeRoute(origin) {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+  const v=navigator.userAgent.match(/DaybookAndroid\/(\d+)\.(\d+)\.(\d+)/);
+  if (!v || !(Number(v[1])>0 || Number(v[2])>3 || Number(v[2])===3&&Number(v[3])>=2)) return;
+  if(location.protocol==='https:'&&location.hostname==='chosenqc.github.io') location.href='daybook://api-route?origin='+encodeURIComponent(origin);
+}
 
 export class CloudConnectionError extends Error {
   constructor(message) { super(message); this.name = 'CloudConnectionError'; }
@@ -46,7 +52,7 @@ export function resolveApiOrigin() {
           if (++failed === API_ORIGINS.length) reject(new CloudConnectionError('当前网络无法连接同步服务，请稍后重试。'));
         });
       }
-    }).then(origin => { selectedOrigin = origin; return origin; }).catch(error => {
+    }).then(origin => { selectedOrigin = origin; informNativeRoute(origin); return origin; }).catch(error => {
       selection = null; selectedOrigin = null; throw error;
     });
   }

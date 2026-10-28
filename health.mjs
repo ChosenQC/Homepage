@@ -1,6 +1,6 @@
 import {METRICS,validProfile} from './body-metrics.mjs?v=20261027-body-2';
 import {morningDaily,DEFAULT_HEALTH_ZONE,validTimeZone,deviceTimeZone} from './health-daily.mjs?v=20261027-suite-2';
-import {fetchCloud} from './cloud-api.mjs?v=20261028-network-2';
+import {fetchCloud} from './cloud-api.mjs?v=20261028-network-3';
 const endpoint = '/api/health/get';
 let records = [], fetching = false, profile=null, profileRevision=null, profileReady=false, nativeState=null, settingsTimer, formDirty=false, refreshDone=Promise.resolve();
 let preferences={timeZone:DEFAULT_HEALTH_ZONE},nativeZoneSent=null;

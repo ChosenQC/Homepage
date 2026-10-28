@@ -1,6 +1,6 @@
 import {activityDays,sleepDays,localDay} from './apple-health-data.mjs?v=20261028-apple-2';
 import {deviceTimeZone} from './health-daily.mjs?v=20261027-suite-2';
-import {fetchCloud,currentApiOrigin} from './cloud-api.mjs?v=20261028-network-2';
+import {fetchCloud,currentApiOrigin} from './cloud-api.mjs?v=20261028-network-3';
 const API='/api/apple/', $=id=>document.getElementById(id);
 let zone=deviceTimeZone(),records=[],meta=null,loading=false,active=false,connection=null,connecting=false;
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

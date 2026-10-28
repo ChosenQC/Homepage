@@ -1,4 +1,4 @@
-# F@Q / Daybook 安卓版 0.3.1
+# F@Q / Daybook 安卓版 0.3.2
 
 底部切换「日程」「健康」「Insight」。日程保留 Daybook；健康显示身体趋势和每周锻炼；Insight 支持多级分类组、Markdown 笔记、搜索、自动保存与最近删除。蓝牙绑定、权限和采集开关都放在「设置」。
 
@@ -52,3 +52,9 @@ GitHub Actions `Build Daybook Android` 使用 JDK 17、Gradle 8.11.1、Android S
 `node apple-health.check.mjs` 验证热量单位、缺失与零、来源选择、睡眠跨午夜、去重与分期合并；`node worker/apple.check.mjs` 验证独立加密、仅上传连接码、Book 隔离、轮换、空样本、校验和重复上传。独立 QA Book 的云端回归使用本地 apple-cloud.check.mjs，模拟数据与真实 Book 分开。
 
 快捷指令 v2：移除了在部分 iOS 上显示空白条件并报错的「如果」分支，改为显示真实服务器响应；已签名，仍需 iPhone 首次运行验证。旧版用户请导入 v2，并将自动化指向 v2 名称。
+
+## 国内网络线路
+
+网页新增 api.chenqiu.top，并保留原 workers.dev 入口。启动时只用无效测试键探测可达性，再选择可用线路；不向其他站点发送 Book，写入失败不会向另一路重复提交。日程、健康与笔记页面共用这一配置。
+
+0.3.2 后台体脂秤上传及午间提醒使用网页已选通的受控入口，仅允许上述两个 HTTPS 域名。旧安装包里的原生接口不能靠刷新网页替换，需要在设置中检查更新一次；网页部分无需重装。旧 iPhone 快捷指令仍使用其导入时的地址，不会被网页自动替换。

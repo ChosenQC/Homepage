@@ -1,5 +1,5 @@
 const $=id=>document.getElementById(id),escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-import {fetchCloud} from './cloud-api.mjs?v=20261028-network-2';
+import {fetchCloud} from './cloud-api.mjs?v=20261028-network-3';
 const API='/api/insight/';
 const key=()=>new URLSearchParams(location.hash.slice(1)).get('calendar'),draftKey=()=>`daybook-insight-drafts:${key()}`;
 let folders=[],notes=[],folderRevision=null,loaded=false,loading=false,active=false,selected=null,folder='all',editingFolder=null,preview=false,folderSaving=false;

@@ -12,8 +12,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 final class ScaleStore {
     static final String SITE="https://chosenqc.github.io/Homepage/";
-    static final String SITE_API="https://floral-flower-7c16.chen-qiu.workers.dev";
-    static final String API="https://floral-flower-7c16.chen-qiu.workers.dev/api/health/ingest";
+    static final String SITE_API="https://api.chenqiu.top";
+    static final String LEGACY_API="https://floral-flower-7c16.chen-qiu.workers.dev";
+    static boolean allowedApi(String origin) {return SITE_API.equals(origin)||LEGACY_API.equals(origin);}
+    static String apiBase(Context c) {String origin=prefs(c).getString("apiOrigin",SITE_API);return allowedApi(origin)?origin:SITE_API;}
     private static final ExecutorService NETWORK=Executors.newSingleThreadExecutor();
     private static final AtomicBoolean SENDING=new AtomicBoolean(false);
     static SharedPreferences prefs(Context context) { return context.getSharedPreferences("daybook",Context.MODE_PRIVATE); }
@@ -66,7 +68,7 @@ final class ScaleStore {
                     JSONObject item=first(c);if(item==null)break;
                     HttpURLConnection connection=null;
                     try {
-                        connection=(HttpURLConnection)new URL(API).openConnection();
+                        connection=(HttpURLConnection)new URL(apiBase(c)+"/api/health/ingest").openConnection();
                         connection.setInstanceFollowRedirects(false);connection.setRequestMethod("POST");connection.setConnectTimeout(10000);connection.setReadTimeout(20000);connection.setDoOutput(true);connection.setRequestProperty("Content-Type","application/json");
                         try(OutputStream out=connection.getOutputStream()){out.write(item.toString().getBytes(StandardCharsets.UTF_8));}
                         int code=connection.getResponseCode();
