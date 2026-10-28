@@ -1,10 +1,11 @@
 import {activityDays,sleepDays,localDay} from './apple-health-data.mjs?v=20261028-apple-2';
 import {deviceTimeZone} from './health-daily.mjs?v=20261027-suite-2';
-const API='https://floral-flower-7c16.chen-qiu.workers.dev/api/apple/', $=id=>document.getElementById(id);
+import {fetchCloud,currentApiOrigin} from './cloud-api.mjs?v=20261028-network-2';
+const API='/api/apple/', $=id=>document.getElementById(id);
 let zone=deviceTimeZone(),records=[],meta=null,loading=false,active=false,connection=null,connecting=false;
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const key=()=>new URLSearchParams(location.hash.slice(1)).get('calendar');
-async function api(route,data={}){const r=await fetch(API+route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:key(),...data}),signal:AbortSignal.timeout(25000)});const result=await r.json();if(!r.ok||!result.ok)throw Error(result.error||'苹果健康同步失败');return result;}
+async function api(route,data={}){const r=await fetchCloud(API+route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:key(),...data})},25000);const result=await r.json();if(!r.ok||!result.ok)throw Error(result.error||'苹果健康同步失败');return result;}
 const time=value=>new Date(value).toLocaleString('zh-CN',{timeZone:zone,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 const duration=minutes=>{const m=Math.round(minutes);return `${Math.floor(m/60)} 小时 ${m%60} 分钟`;};
 function daysEnding(day){const d=new Date(day+'T12:00:00Z');return Array.from({length:7},(_,i)=>{const v=new Date(d);v.setUTCDate(d.getUTCDate()-6+i);return v.toISOString().slice(0,10);});}
@@ -22,7 +23,7 @@ function draw(){
 async function refresh(){if(loading||document.visibilityState!=='visible')return;loading=true;try{const result=await api('get');records=result.records||[];meta=result;draw();}catch(error){$('appleHealthStatus').textContent=error.message;}finally{loading=false;}}
 $('appleHealthDay').value=localDay(Date.now(),zone);$('appleHealthDay').onchange=draw;
 function showConnection(){
-  $('appleUploadURL').value=connection?.endpoint||API+'ingest';$('appleUploadToken').value=connection?.token||'';
+  $('appleUploadURL').value=currentApiOrigin()+API+'ingest';$('appleUploadToken').value=connection?.token||'';
   $('appleConnectionStatus').textContent=connection?'复制后，在导入快捷指令时粘贴连接码。':'用 iPhone 导入快捷指令即可连接。';$('copyAppleToken').disabled=!connection;$('appleSyncDialog').showModal();
 }
 $('connectAppleHealth').onclick=async()=>{showConnection();if(connection||connecting)return;connecting=true;$('appleConnectionStatus').textContent='正在生成连接码…';try{connection=await api('connect');showConnection();}catch(error){$('appleConnectionStatus').textContent=error.message;}finally{connecting=false;}};

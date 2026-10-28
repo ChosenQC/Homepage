@@ -1,6 +1,7 @@
 import {METRICS,validProfile} from './body-metrics.mjs?v=20261027-body-2';
 import {morningDaily,DEFAULT_HEALTH_ZONE,validTimeZone,deviceTimeZone} from './health-daily.mjs?v=20261027-suite-2';
-const endpoint = 'https://floral-flower-7c16.chen-qiu.workers.dev/api/health/get';
+import {fetchCloud} from './cloud-api.mjs?v=20261028-network-2';
+const endpoint = '/api/health/get';
 let records = [], fetching = false, profile=null, profileRevision=null, profileReady=false, nativeState=null, settingsTimer, formDirty=false, refreshDone=Promise.resolve();
 let preferences={timeZone:DEFAULT_HEALTH_ZONE},nativeZoneSent=null;
 const $ = id => document.getElementById(id);
@@ -48,7 +49,7 @@ async function refresh(force=false) {
   fetching=true;
   let finish;refreshDone=new Promise(resolve=>{finish=resolve;});
   try {
-    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key}),signal:AbortSignal.timeout(20000)});
+    const response=await fetchCloud(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});
     const result=await response.json();
     if(!response.ok||!result.ok)throw new Error(result.error||'同步失败');
     records=(result.records||[]).filter(r=>Number.isFinite(r.weightKg)&&Number.isFinite(Date.parse(r.measuredAt))).sort((a,b)=>a.measuredAt.localeCompare(b.measuredAt));
@@ -87,7 +88,7 @@ $('bodyProfileForm').onsubmit=async event=>{
   if(!validProfile(value)){ $('profileStatus').textContent='请检查身高、年龄和性别';return; }
   $('saveBodyProfile').disabled=true;$('profileStatus').textContent='正在保存…';
   try{
-    const response=await fetch(endpoint.replace('/get','/profile'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:bookKey(),profile:value,revision:profileRevision}),signal:AbortSignal.timeout(20000)});
+    const response=await fetchCloud(endpoint.replace('/get','/profile'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:bookKey(),profile:value,revision:profileRevision})});
     const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'保存失败');
     profile=result.profile;profileRevision=result.revision;$('profileStatus').textContent='已保存，正在更新趋势';await refresh(true);$('profileStatus').textContent='已保存到云端';
   }catch(error){$('profileStatus').textContent=error.message;if(error.message.includes('其他设备')){await refresh();fillProfile();$('profileStatus').textContent='资料已更新，请核对后重新保存';}}

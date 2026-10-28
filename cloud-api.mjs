@@ -1,18 +1,19 @@
-// Change this only after the replacement domain is configured and verified.
-// Keep Book keys in POST bodies and never send them to arbitrary fallback hosts.
-export const API_ORIGIN = 'https://floral-flower-7c16.chen-qiu.workers.dev';
+// Both hosts route to the same Worker. Probes contain no Book key or user data.
+export const API_ORIGIN = 'https://api.chenqiu.top';
+export const API_ORIGINS = Object.freeze([API_ORIGIN,'https://floral-flower-7c16.chen-qiu.workers.dev']);
+let selectedOrigin = null, selection = null;
 
 export class CloudConnectionError extends Error {
   constructor(message) { super(message); this.name = 'CloudConnectionError'; }
 }
 
-export async function fetchCloud(path, options = {}, timeoutMs = 20000) {
+async function requestAt(origin, path, options = {}, timeoutMs = 20000) {
   if (!path.startsWith('/api/')) throw new Error('Invalid API path');
   const controller = new AbortController();
   let timer;
   try {
     return await Promise.race([
-      fetch(API_ORIGIN + path, { ...options, signal: controller.signal }),
+      fetch(origin + path, { ...options, signal: controller.signal }),
       new Promise((_, reject) => {
         timer = setTimeout(() => {
           reject(new CloudConnectionError('连接云端超时，请检查网络后重试。'));
@@ -27,6 +28,39 @@ export async function fetchCloud(path, options = {}, timeoutMs = 20000) {
     }
     throw error;
   } finally { clearTimeout(timer); }
+}
+
+export const currentApiOrigin = () => selectedOrigin || API_ORIGIN;
+export function resolveApiOrigin() {
+  if (!selection) {
+    selection = new Promise((resolve, reject) => {
+      let failed = 0;
+      for (const origin of API_ORIGINS) {
+        (async () => {
+          const response = await requestAt(origin,'/api/shared/get',{
+            method:'POST',headers:{'Content-Type':'application/json'},body:'{"key":"invalid"}'
+          },6000);
+          if (response.status !== 400 || (await response.json()).error !== 'Invalid calendar link') throw new Error('Probe failed');
+          return origin;
+        })().then(resolve, () => {
+          if (++failed === API_ORIGINS.length) reject(new CloudConnectionError('当前网络无法连接同步服务，请稍后重试。'));
+        });
+      }
+    }).then(origin => { selectedOrigin = origin; return origin; }).catch(error => {
+      selection = null; selectedOrigin = null; throw error;
+    });
+  }
+  return selection;
+}
+
+export async function fetchCloud(path, options = {}, timeoutMs = 20000) {
+  if (!path.startsWith('/api/')) throw new Error('Invalid API path');
+  const origin = await resolveApiOrigin();
+  try { return await requestAt(origin,path,options,timeoutMs); }
+  catch(error) {
+    // A write may have committed before its response was lost. Never resend it.
+    selection = null; selectedOrigin = null; throw error;
+  }
 }
 
 // Initial load, foreground refresh and the visible retry button share one read.

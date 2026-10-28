@@ -1,5 +1,6 @@
 const $=id=>document.getElementById(id),escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const API='https://floral-flower-7c16.chen-qiu.workers.dev/api/insight/';
+import {fetchCloud} from './cloud-api.mjs?v=20261028-network-2';
+const API='/api/insight/';
 const key=()=>new URLSearchParams(location.hash.slice(1)).get('calendar'),draftKey=()=>`daybook-insight-drafts:${key()}`;
 let folders=[],notes=[],folderRevision=null,loaded=false,loading=false,active=false,selected=null,folder='all',editingFolder=null,preview=false,folderSaving=false;
 const dirty=new Set(),conflicts=new Set(),blocked=new Set(),inflight=new Set(),timers=new Map(),collapsed=new Set();
@@ -7,7 +8,7 @@ let drafts={};
 function readDrafts(){try{drafts=JSON.parse(localStorage.getItem(draftKey())||'{}');}catch{drafts={};}}
 function storeDrafts(){try{localStorage.setItem(draftKey(),JSON.stringify(drafts));}catch{$('insightStatus').textContent='本机草稿存储已满，请保持页面打开并联网保存。';}}
 function fields(note){return {id:note.id,title:note.title.trim()||'无标题',content:note.content,folderId:note.folderId??null,deletedAt:note.deletedAt||null};}
-async function api(route,data={}){const response=await fetch(API+route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:key(),...data}),signal:AbortSignal.timeout(20000)});let result;try{result=await response.json();}catch{throw Error('笔记同步未完成，本机草稿已保留');}if(!response.ok){const e=Error(result.error||'笔记同步失败');e.conflict=response.status===409;e.permanent=response.status===400||response.status===413;throw e;}return result;}
+async function api(route,data={}){const response=await fetchCloud(API+route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:key(),...data})});let result;try{result=await response.json();}catch{throw Error('笔记同步未完成，本机草稿已保留');}if(!response.ok){const e=Error(result.error||'笔记同步失败');e.conflict=response.status===409;e.permanent=response.status===400||response.status===413;throw e;}return result;}
 function pathOf(id,seen=new Set()){const f=folders.find(x=>x.id===id);if(!f||seen.has(id))return '';seen.add(id);const parent=f.parentId?pathOf(f.parentId,seen):'';return (parent?parent+' / ':'')+f.name;}
 function descendants(id,seen=new Set()){if(!id||seen.has(id))return seen;seen.add(id);for(const f of folders.filter(x=>x.parentId===id))descendants(f.id,seen);return seen;}
 function folderOptions(exclude=null){const skip=exclude?descendants(exclude):new Set();return '<option value="">未分类 / 顶层</option>'+folders.filter(f=>!skip.has(f.id)).map(f=>`<option value="${escape(f.id)}">${escape(pathOf(f.id))}</option>`).join('');}
