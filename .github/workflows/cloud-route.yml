@@ -1,0 +1,25 @@
+name: Verify cloud routes
+on:
+  workflow_dispatch:
+  push:
+    paths: ['cloud-api.mjs', '.github/workflows/cloud-route.yml']
+permissions:
+  contents: read
+jobs:
+  https-and-cors:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check HTTPS and browser API responses without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' '{"key":"invalid"}' > request.json
+          for origin in https://api.chenqiu.top https://floral-flower-7c16.chen-qiu.workers.dev; do
+            status=$(curl --silent --show-error --max-time 25 --retry 0 --dump-header headers.txt --output response.json --write-out '%{http_code}' -H 'Content-Type: application/json' -H 'Origin: https://chosenqc.github.io' --data-binary @request.json "$origin/api/shared/get")
+            test "$status" = 400
+            node -e 'const fs=require("fs");if(JSON.parse(fs.readFileSync("response.json")).error!=="Invalid calendar link")process.exit(1)'
+            grep -qi '^access-control-allow-origin: \*' headers.txt
+            preflight=$(curl --silent --show-error --max-time 25 --output /dev/null --write-out '%{http_code}' -X OPTIONS -H 'Origin: https://chosenqc.github.io' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: content-type' "$origin/api/shared/get")
+            test "$preflight" = 200
+            printf 'PASS HTTPS + POST + CORS preflight: %s\n' "$origin"
+          done
