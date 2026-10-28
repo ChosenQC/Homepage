@@ -1,10 +1,10 @@
 import { expandTasks, repeatLabel, occurrenceFor } from './recurrence.mjs?v=20261027-suite-2';
 import {normalizeGroups,groupForTask} from './task-groups.mjs?v=20261027-suite-2';
 import {publishCalendar} from './suite-state.mjs?v=20261027-suite-2';
+import {fetchCloud,singleFlight} from './cloud-api.mjs?v=20261028-network-1';
 // Calendar config
 const WEEK_START = 0;        // 0=Sunday
 
-const API_BASE = "https://floral-flower-7c16.chen-qiu.workers.dev";
 const LINK_KEY = "todo_calendar_link_v1";
 const ONLINE_URL = "https://chosenqc.github.io/Homepage/";
 let calendarKey;
@@ -197,10 +197,9 @@ document.getElementById('taskGroupForm').onsubmit=e=>{e.preventDefault();withBus
   try{await persist();renderAll();document.getElementById('taskGroupDialog').close();}catch(error){document.getElementById('taskGroupStatus').textContent=error.message;}
 })();};
 async function sharedApi(action, payload = {}) {
-  const res = await fetch(`${API_BASE}/api/shared/${action}`, {
+  const res = await fetchCloud(`/api/shared/${action}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key: calendarKey, ...payload }),
-    signal: AbortSignal.timeout(20000),
   });
   let data;
   try { data = await res.json(); } catch { throw new Error("云端响应异常，请稍后重试。"); }
@@ -274,7 +273,7 @@ async function persist() {
     throw error;
   }
 }
-async function loadRemote() {
+const loadRemote = singleFlight(async () => {
   setAppMsg("同步中…");
   const result = await sharedApi("get");
   store = normalizeStore(result.todos);
@@ -284,7 +283,7 @@ async function loadRemote() {
   loaded = true;
   renderAll();
   setAppMsg(revision ? `已从云端同步 · ${store.tasks.length} 项任务` : "新日历 · 添加任务后自动保存到云端");
-}
+});
 const syncFromRemote = withBusy(loadRemote);
 
 // ---------- render ----------
@@ -391,7 +390,7 @@ function renderCalendar() {
     add.title = `${shortDate(date)}添加任务`;
     add.setAttribute("aria-label", add.title);
     add.innerHTML = '<svg aria-hidden="true"><use href="#i-plus"/></svg>';
-    add.onclick = () => openCreateScheduled(defaultStart(date));
+    add.onclick = () => requestTaskCreation(() => openCreateScheduled(defaultStart(date)));
     row.append(label, content, add);
     calGrid.appendChild(row);
   }
@@ -604,6 +603,36 @@ for (const button of quickDurationButtons) {
 taskTitleInput.addEventListener("input", syncQuickChoices);
 taskDurInput.addEventListener("input", syncQuickChoices);
 let modalReturnFocus;
+const connectionDialog = document.getElementById('calendarConnectionDialog');
+const connectionTitle = document.getElementById('calendarConnectionTitle');
+const connectionMessage = document.getElementById('calendarConnectionMessage');
+const connectionRetry = document.getElementById('calendarConnectionRetry');
+let creationRequest = 0;
+document.getElementById('calendarConnectionClose').onclick = () => connectionDialog.close();
+connectionDialog.addEventListener('close', () => { creationRequest++; });
+async function requestTaskCreation(createTask) {
+  if (loaded) { createTask(); return; }
+  const request = ++creationRequest;
+  connectionTitle.textContent = '正在连接云端';
+  connectionMessage.textContent = '正在同步现有日程，连接后即可新建任务…';
+  connectionRetry.disabled = true;
+  connectionRetry.onclick = () => requestTaskCreation(createTask);
+  if (!connectionDialog.open) connectionDialog.showModal();
+  try {
+    if (!calendarKey) throw new Error('同步链接尚未就绪，请检查完整 Book 链接后刷新。');
+    await loadRemote();
+    if (request !== creationRequest || !connectionDialog.open) return;
+    connectionDialog.close();
+    createTask();
+  } catch (error) {
+    if (request !== creationRequest || !connectionDialog.open) return;
+    connectionTitle.textContent = '暂时无法连接云端';
+    connectionMessage.textContent = error.message || '连接失败，请检查网络后重试。';
+    setAppMsg(connectionMessage.textContent);
+  } finally {
+    if (request === creationRequest) connectionRetry.disabled = false;
+  }
+}
 function openModal() {
   modalReturnFocus = document.activeElement;
   modalOverlay.classList.remove("hidden");
@@ -843,10 +872,10 @@ nextWeekBtn.onclick = () => { viewDate = addDays(viewDate,  7); renderCalendar()
 todayBtn.onclick = () => { viewDate = new Date(); renderCalendar(); };
 
 // ---------- sidebar actions ----------
-newDeadlineBtn.onclick = () => openCreateDeadline(viewDate);
+newDeadlineBtn.onclick = () => requestTaskCreation(() => openCreateDeadline(viewDate));
 document.getElementById("newTaskBtn").onclick = () => {
   const week0 = startOfWeek(viewDate), now = new Date();
-  openCreateScheduled(defaultStart(now >= week0 && now < addDays(week0, 7) ? now : week0));
+  requestTaskCreation(() => openCreateScheduled(defaultStart(now >= week0 && now < addDays(week0, 7) ? now : week0)));
 };
 syncBtn.addEventListener("click", syncFromRemote);
 
